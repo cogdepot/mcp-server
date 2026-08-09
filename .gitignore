@@ -9,3 +9,14 @@ coverage/
 
 npm-debug.log*
 .DS_Store
+
+# Internal planning documents live in a separate private repository and must
+# never be committed here. Ignoring them stops the careless copy before it is
+# staged; .github/workflows/verify-publishable.yml catches the rest.
+mcp-server-plan.md
+EXECUTION.md
+PRD.md
+TDD.md
+COSTS.md
+chance-history.md
+marketing-*.md
