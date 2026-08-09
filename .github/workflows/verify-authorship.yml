@@ -1,0 +1,59 @@
+name: verify-authorship
+
+# Commit identity is a project invariant: this repository becomes public at the
+# first release, and commit history is permanent once it does. GitHub's
+# commit_author_email_pattern ruleset would enforce this at push time, but that
+# rule type is Enterprise-only and is silently a no-op on the Team plan - it
+# reports enforcement: active and lets non-matching commits through. Verified
+# 2026-08-09. This check is the enforceable substitute, wired as a required
+# status check so a non-compliant commit cannot merge.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  authorship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Every commit must carry the project identity
+        env:
+          EXPECTED: akashy@cogdepot.com
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          # github.event.before is all-zeros for a new branch, and the base may
+          # not exist in a shallow or force-pushed history. Fall back to
+          # checking everything reachable rather than silently checking nothing.
+          if [ -z "${BASE_SHA:-}" ] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            RANGE="$HEAD_SHA"
+          else
+            RANGE="${BASE_SHA}..${HEAD_SHA}"
+          fi
+
+          echo "Checking $RANGE"
+          BAD=$(git log --format='%H %ae %ce' "$RANGE" \
+                | awk -v want="$EXPECTED" '$2 != want || $3 != want')
+
+          if [ -n "$BAD" ]; then
+            echo "::error::Commits do not carry the project identity ($EXPECTED)."
+            echo "Offending commits (sha author-email committer-email):"
+            echo "$BAD"
+            echo ""
+            echo "Fix your clone, then rewrite the offending commits:"
+            echo "  git config --local user.name akashy"
+            echo "  git config --local user.email $EXPECTED"
+            exit 1
+          fi
+
+          echo "OK - every commit in $RANGE is authored and committed by $EXPECTED"
