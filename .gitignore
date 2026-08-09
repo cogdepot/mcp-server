@@ -10,9 +10,9 @@ coverage/
 npm-debug.log*
 .DS_Store
 
-# Internal planning documents live in the private cogdepot/cogDepot repository
-# and must never be committed here. Ignoring them stops the careless copy before
-# it is staged; .github/workflows/verify-publishable.yml catches the rest.
+# Internal planning documents live in a separate private repository and must
+# never be committed here. Ignoring them stops the careless copy before it is
+# staged; .github/workflows/verify-publishable.yml catches the rest.
 mcp-server-plan.md
 EXECUTION.md
 PRD.md

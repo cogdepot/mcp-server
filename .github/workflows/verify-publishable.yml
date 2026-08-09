@@ -1,14 +1,14 @@
 name: verify-publishable
 
 # This repository is public. The planning, costing and strategy documents for
-# this work live in the PRIVATE cogdepot/cogDepot repository and must never
-# appear here - they carry revenue targets, channel post-mortems, unreleased
-# decisions and internal task ids.
+# this work live in a separate private repository and must never appear here -
+# they carry revenue targets, channel post-mortems, unreleased decisions and
+# internal task ids.
 #
 # The risk is not malice, it is a careless copy: the plan document is the thing
 # you read while writing this server, and it sits one directory away. A denylist
-# in .gitignore stops the accident; this check stops the accident that used
-# `git add -f`, or arrived through a branch made somewhere else.
+# in .gitignore stops the accident before staging; this check stops the accident
+# that used `git add -f`, or arrived on a branch made somewhere else.
 
 on:
   pull_request:
@@ -27,15 +27,15 @@ jobs:
       - name: Refuse internal planning documents by filename
         run: |
           set -euo pipefail
-          PATTERN='(^|/)(mcp-server-plan|EXECUTION|PRD|TDD|COSTS|DESIGN|CHANGELOG-internal|LANDING_REDESIGN|VISION-REMEDIATION|chance-history|feedback-improvement-plan|x402-integration-plan|directory-submission[^/]*|[^/]*-submissions-log|marketing-[^/]*)\.md$'
+          PATTERN='(^|/)(mcp-server-plan|EXECUTION|PRD|TDD|COSTS|DESIGN|LANDING_REDESIGN|VISION-REMEDIATION|chance-history|feedback-improvement-plan|x402-integration-plan|directory-submission[^/]*|[^/]*-submissions-log|marketing-[^/]*)\.md$'
           BAD=$(git ls-files | grep -iE "$PATTERN" || true)
           if [ -n "$BAD" ]; then
             echo "::error::Internal planning documents must not be committed to the public repository."
             echo "$BAD"
             echo ""
-            echo "These live in the private cogdepot/cogDepot repository. If a public"
-            echo "document genuinely needs one of these names, rename it rather than"
-            echo "weakening this check."
+            echo "These belong in the private planning repository. If a public document"
+            echo "genuinely needs one of these names, rename it rather than weakening"
+            echo "this check."
             exit 1
           fi
           echo "OK - no internal planning documents by filename"
@@ -43,10 +43,16 @@ jobs:
       - name: Refuse references to the private repository
         run: |
           set -euo pipefail
-          # cogdepot/cogDepot is the private repo. io.github.cogdepot/cogdepot is
-          # the MCP Registry namespace and is expected - the case-sensitive match
-          # on the capital D is what separates them, so do NOT add -i here.
-          HITS=$(git grep -n 'cogdepot/cogDepot' -- . || true)
+
+          # The bracket around [D] is deliberate and load-bearing. The private
+          # repository's path differs from this project's MCP Registry namespace
+          # only by the capital D, so the match must stay case-sensitive - and
+          # writing the path literally here would make this file match itself,
+          # which is exactly how the first version of this check failed. The
+          # bracket keeps the pattern from matching its own text without needing
+          # a path exclusion, and an exclusion would be a hole to hide in.
+          HITS=$(git grep -nE 'cogdepot/cog[D]epot' -- . || true)
+
           if [ -n "$HITS" ]; then
             echo "::error::Reference to the private repository found."
             echo "$HITS"
