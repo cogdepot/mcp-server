@@ -1,0 +1,75 @@
+name: release
+
+# Promotes develop to main as the bot rather than as a person, so the public
+# release trail on a public repo reads cogdepot-bot[bot].
+#
+# Why a GitHub App and not the built-in GITHUB_TOKEN: pushes and tags made with
+# GITHUB_TOKEN deliberately do not trigger other workflows, so a tag created
+# that way would never fire the publish workflow. An App installation token has
+# no such restriction.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag, without the leading v (e.g. 1.0.0). Leave blank to merge without tagging."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint an installation token for the bot
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Open and merge the promotion PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          if git rev-parse --verify origin/main >/dev/null 2>&1 \
+             && [ "$(git rev-parse origin/develop)" = "$(git rev-parse origin/main)" ]; then
+            echo "main is already at develop. Nothing to promote."
+            exit 0
+          fi
+
+          # Reuse an open promotion PR rather than stacking duplicates.
+          PR=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+          if [ -z "$PR" ]; then
+            PR=$(gh pr create --base main --head develop \
+                   --title "release: promote develop to main" \
+                   --body "Automated promotion. Merged by the release app so the public trail is not a personal account." \
+                   --json number --jq .number)
+          fi
+          echo "promotion PR: #$PR"
+
+          # --merge, not --squash: squashing rewrites authorship onto the merger
+          # and would put the bot's identity on every commit, defeating the
+          # authorship check and losing the akashy attribution in history.
+          gh pr merge "$PR" --merge --delete-branch=false
+
+      - name: Tag the release
+        if: inputs.version != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          SHA=$(git rev-parse origin/main)
+          gh api -X POST repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/v${{ inputs.version }}" -f sha="$SHA"
+          echo "tagged v${{ inputs.version }} at $SHA"
