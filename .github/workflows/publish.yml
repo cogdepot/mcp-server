@@ -1,0 +1,91 @@
+name: publish
+
+# Publishes the npm package and the MCP Registry entry from one tag.
+#
+# Both hops authenticate off the SAME OIDC token and no long-lived secret
+# exists in this repository. The registry's own sample workflow publishes npm
+# with an NPM_TOKEN; that part is deliberately not copied. npm trusted
+# publishing removes the token entirely and attaches a provenance attestation by
+# default, which matters more here than usual - this package is a thing a
+# stranger lets run on their machine holding their API key, and `postmark-mcp`
+# is the precedent for why that attestation is worth having.
+#
+# PREREQUISITES, none of which this workflow can create:
+#   1. The npm org `cogdepot` exists and the package name is claimed.
+#   2. npm trusted publishing is configured for cogdepot/mcp-server with THIS
+#      filename. Renaming this file silently breaks publishing until the npm
+#      side is updated to match.
+#   3. The repository is public, so Glama and PulseMCP can index it.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write # OIDC, for npm trusted publishing AND mcp-publisher
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run coverage
+      - run: npm run build
+
+      - name: Smoke the built artefact before it is published
+        run: node scripts/smoke.mjs
+
+      - name: Version must match the tag in all three places
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          SRV_VERSION=$(node -p "require('./server.json').version")
+          PKG_INNER=$(node -p "require('./server.json').packages[0].version")
+          MCP_NAME=$(node -p "require('./package.json').mcpName")
+          SRV_NAME=$(node -p "require('./server.json').name")
+
+          echo "tag=$TAG_VERSION package.json=$PKG_VERSION server.json=$SRV_VERSION packages[0]=$PKG_INNER"
+
+          [ "$TAG_VERSION" = "$PKG_VERSION" ] || { echo "::error::package.json version does not match the tag"; exit 1; }
+          [ "$TAG_VERSION" = "$SRV_VERSION" ] || { echo "::error::server.json version does not match the tag"; exit 1; }
+          [ "$TAG_VERSION" = "$PKG_INNER" ] || { echo "::error::server.json packages[0].version does not match the tag"; exit 1; }
+          # A mismatch here is a hard publish blocker at the registry, and it
+          # fails there with a message that does not name the cause.
+          [ "$MCP_NAME" = "$SRV_NAME" ] || { echo "::error::package.json mcpName ($MCP_NAME) != server.json name ($SRV_NAME)"; exit 1; }
+
+      - name: Publish to npm
+        # No NODE_AUTH_TOKEN. Trusted publishing supplies the credential from
+        # the OIDC token above, and provenance is attached by default.
+        run: npm publish --access public
+
+      - name: Install mcp-publisher
+        # Pinned, not `latest`: a publisher release must not be able to change
+        # what a tagged release does.
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          curl -fL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to the MCP Registry
+        # github-oidc, not github: the latter is the interactive device-code flow.
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to the MCP Registry
+        run: ./mcp-publisher publish
+
+      - name: Remind that propagation is not proven by a successful publish
+        run: |
+          echo "::notice::Published. Now VERIFY listings by looking at Smithery, Glama and PulseMCP."
+          echo "::notice::T968 was blocked precisely because 'it lists automatically' was believed rather than checked."
