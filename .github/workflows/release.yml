@@ -27,7 +27,9 @@ jobs:
         id: app
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
+          # client-id, not app-id: v3 deprecates app-id. Both identify the same
+          # App; the client id is the one the action wants now.
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v5
@@ -50,10 +52,12 @@ jobs:
           # Reuse an open promotion PR rather than stacking duplicates.
           PR=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
           if [ -z "$PR" ]; then
-            PR=$(gh pr create --base main --head develop \
-                   --title "release: promote develop to main" \
-                   --body "Automated promotion. Merged by the release app so the public trail is not a personal account." \
-                   --json number --jq .number)
+            # gh pr create has no --json flag; it prints the PR URL. Take the
+            # number off the end rather than inventing a flag that does not exist.
+            PR_URL=$(gh pr create --base main --head develop \
+                       --title "release: promote develop to main" \
+                       --body "Automated promotion. Merged by the release app so the public trail is not a personal account.")
+            PR=${PR_URL##*/}
           fi
           echo "promotion PR: #$PR"
 
