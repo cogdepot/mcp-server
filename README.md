@@ -32,5 +32,22 @@ git config --local user.name akashy
 git config --local user.email akashy@cogdepot.com
 ```
 
-The check runs on every push and pull request and is a required status check on
-both protected branches.
+The check runs on every push and pull request, and is a required status check on
+`main`.
+
+## Releases
+
+`develop` takes direct pushes. `main` does not: it requires a pull request and a
+passing `authorship` check, with no bypass actors.
+
+`main` is reached only through the `release` workflow, which authenticates as the
+`cogdepot-bot` GitHub App and merges `develop` in. Releasing as the App rather
+than as a person keeps the public release trail off a personal account, and
+matters mechanically too - a tag pushed with the built-in `GITHUB_TOKEN` would
+not trigger the publish workflow, while an App installation token does.
+
+```bash
+gh workflow run release.yml --repo cogdepot/mcp-server -f version=1.0.0
+```
+
+Omit `version` to promote without tagging.
