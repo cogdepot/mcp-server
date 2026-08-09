@@ -42,7 +42,9 @@ jobs:
           fi
 
           echo "Checking $RANGE"
-          BAD=$(git log --format='%H %ae %ce' "$RANGE" \
+
+          # Content commits must be the project identity, with no exceptions.
+          BAD=$(git log --no-merges --format='%H %ae %ce' "$RANGE" \
                 | awk -v want="$EXPECTED" '$2 != want || $3 != want')
 
           if [ -n "$BAD" ]; then
@@ -56,4 +58,30 @@ jobs:
             exit 1
           fi
 
-          echo "OK - every commit in $RANGE is authored and committed by $EXPECTED"
+          # Merge commits are a different case, and the first version of this
+          # check got it wrong: a release promotion is performed by the
+          # cogdepot-bot App, so GitHub creates the merge commit authored by the
+          # bot and committed by its own web-flow identity. Neither is the
+          # project identity, so requiring it here failed every promotion - and
+          # failed it *after* the merge, where nothing gates it, because the
+          # merge commit does not exist while the PR is being checked.
+          #
+          # Merge commits carry no content of their own; their parents are
+          # checked above. So allow the release identities here and nowhere else.
+          BAD_MERGE=$(git log --merges --format='%H %ae %ce' "$RANGE" | awk -v want="$EXPECTED" '
+            function allowed(email) {
+              return email == want \
+                  || index(email, "cogdepot-bot[bot]@users.noreply.github.com") > 0 \
+                  || email == "noreply@github.com"
+            }
+            !allowed($2) || !allowed($3)')
+
+          if [ -n "$BAD_MERGE" ]; then
+            echo "::error::Merge commits must be made by the project identity or the release bot."
+            echo "Offending merges (sha author-email committer-email):"
+            echo "$BAD_MERGE"
+            exit 1
+          fi
+
+          echo "OK - content commits in $RANGE are authored and committed by $EXPECTED"
+          echo "OK - any merge commits are the project identity or the release bot"
