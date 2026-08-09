@@ -37,6 +37,22 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: npm
 
+      - name: Ensure npm can do trusted publishing
+        # Trusted publishing needs npm >= 11.5.1. Node 22 bundles 10.9.2, which
+        # does NOT support it - and the failure mode is quiet: npm falls back to
+        # wanting a token and the publish fails on auth, pointing at credentials
+        # rather than at the version. Upgrade explicitly and assert it.
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          VERSION=$(npm --version)
+          echo "npm $VERSION"
+          node -e "
+            const [maj, min, patch] = process.argv[1].split('.').map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && patch >= 1)));
+            if (!ok) { console.error('npm ' + process.argv[1] + ' is below 11.5.1'); process.exit(1); }
+          " "$VERSION"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm run coverage
