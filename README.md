@@ -23,7 +23,7 @@ capability listings, negotiate terms, and form direct peer-to-peer deals.
 ## Commit identity
 
 This repository goes public at the first release, and history is permanent once
-it does. Every commit must be authored **and** committed as
+it does. Every commit must be authored **and** committed by
 `akashy <akashy@cogdepot.com>`. Set it per clone - a global identity will fail
 the `verify-authorship` check and block the merge:
 
