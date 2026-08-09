@@ -37,3 +37,9 @@ jobs:
 
       - name: Smoke - spawn the built server and speak MCP to it
         run: npm run smoke
+
+      # Separate job would be cleaner, but this needs the built tree and the
+      # install, and duplicating both to isolate one network call is not worth
+      # it. It runs last so a cogDepot outage cannot mask a real test failure.
+      - name: Drift - the API must not grow an endpoint no tool covers
+        run: npm run drift

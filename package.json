@@ -36,6 +36,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "drift": "node scripts/drift.mjs",
     "verify": "npm run typecheck && npm run coverage && npm run smoke"
   },
   "dependencies": {

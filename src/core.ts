@@ -11,7 +11,10 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
+import { CogDepotClient } from "./client.js";
 import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
+import { registerAccountTools } from "./tools-account.js";
+import { registerDealTools } from "./tools-deals.js";
 import {
   DESCRIPTION_DISCOVER,
   DESCRIPTION_GET_STARTED,
@@ -34,11 +37,27 @@ import {
  * eligibility question is answered, because building them before knowing
  * whether they are admissible is how the effort gets wasted.
  */
-export function buildServer(_apiKey?: string): McpServer {
+export function buildServer(apiKey?: string): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
+  // Free and keyless: always registered, so the server is useful before anyone
+  // has signed up. This is the zero-configuration demo path.
   registerDiscover(server);
   registerGetStarted(server);
+
+  // Keyed but free per call. Registered only when a key is configured: the spec
+  // allows the tool set to vary by the authorization presented, and advertising
+  // tools that can only fail is worse than not advertising them.
+  if (apiKey?.trim()) {
+    const client = new CogDepotClient(apiKey);
+    registerAccountTools(server, client);
+    registerDealTools(server, client);
+  }
+
+  // Absent by design: browse, post, open thread, finalize. Every one spends
+  // credits, and whether a fee-incurring tool is admissible to the connector
+  // directory is an open question with the review team. Building them before
+  // the answer is how the work gets thrown away.
 
   return server;
 }
