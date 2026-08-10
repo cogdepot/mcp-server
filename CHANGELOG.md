@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3 - unreleased
+## 0.1.3 - 2026-08-10
 
 **Fixes a credit-balance error in every earlier version. See the warning below.**
 
