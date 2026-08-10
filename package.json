@@ -42,7 +42,8 @@
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "drift": "node scripts/drift.mjs",
-    "verify": "npm run typecheck && npm run coverage && npm run smoke"
+    "verify": "npm run typecheck && npm run coverage && npm run smoke",
+    "prepublishOnly": "npm run verify"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
