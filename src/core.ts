@@ -119,6 +119,16 @@ export function renderOverview(result: FactsResult): string {
 
   const credits = record(facts.credits);
   if (credits.length > 0) {
+    // This prints the whole `credits` block, including `topUp`, which names
+    // Lightning and stablecoins. That is deliberate and is NOT the same call as
+    // the one made in errors.ts, which strips those rails out of a 402.
+    //
+    // The distinction is what the reader is about to do. Here a model is
+    // answering "what does this cost and how would I pay" - describing that a
+    // service accepts crypto is product information, and omitting it would make
+    // the pricing answer incomplete. In a 402 the model is mid-action and one
+    // step from acting on payment instructions, which is the case both connector
+    // directories bar. Informational, not operational.
     lines.push("", "## Cost");
     for (const [key, value] of credits) lines.push(`- **${key}**: ${value}`);
   }

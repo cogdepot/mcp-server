@@ -70,6 +70,43 @@ const EXCLUDED = {
   // spec never offers, which is the stale-entry warning below.
 };
 
+// Cross-check the other direction first: every tool this file claims covers an
+// endpoint must actually be registered. Without this the guard is half a guard -
+// it notices the API growing, but deleting a tool would leave COVERED asserting
+// a name that no longer exists and the check would still pass.
+// Asked over the real protocol rather than by reading an SDK internal: an
+// underscore-prefixed field is not a contract, and a check that breaks on an
+// SDK upgrade is a check that gets disabled.
+const { buildServer } = await import("../dist/core.js");
+const { Client } = await import("@modelcontextprotocol/client");
+const { InMemoryTransport } = await import("@modelcontextprotocol/server");
+
+const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+const driftClient = new Client({ name: "drift", version: "0.0.0" });
+await Promise.all([
+  buildServer("drift-check-not-a-real-key").connect(serverTransport),
+  driftClient.connect(clientTransport),
+]);
+const { tools } = await driftClient.listTools();
+await driftClient.close();
+
+const registered = new Set(tools.map((t) => t.name));
+
+if (registered.size === 0) {
+  console.error("drift: the server registered no tools - is dist/ built?");
+  process.exit(1);
+}
+
+const missingTools = [...new Set(Object.values(COVERED))].filter((t) => !registered.has(t));
+if (missingTools.length > 0) {
+  console.error("drift: COVERED names tools that are not registered:");
+  for (const t of missingTools) console.error(`  - ${t}`);
+  console.error("");
+  console.error("Either the tool was removed and this file was not updated, or it was renamed.");
+  process.exit(1);
+}
+console.log(`drift: ${registered.size} tools registered, all names in COVERED resolve`);
+
 const response = await fetch(OPENAPI_URL, { headers: { accept: "application/json" } });
 if (!response.ok) {
   console.error(`drift: could not fetch ${OPENAPI_URL} (HTTP ${response.status})`);
