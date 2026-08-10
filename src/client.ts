@@ -15,6 +15,28 @@ import { REQUEST_TIMEOUT_MS } from "./strings.js";
 export interface RequestOptions {
   readonly method?: "GET" | "POST" | "PUT";
   readonly body?: unknown;
+  /**
+   * Sent as `Idempotency-Key`. The API replays the original result for a
+   * repeated key instead of executing the action again.
+   *
+   * Every endpoint that moves credits accepts one, and for those it is the
+   * difference between a retried call and a second charge. Tools that spend
+   * always send one.
+   */
+  readonly idempotencyKey?: string;
+}
+
+/**
+ * A fresh idempotency key.
+ *
+ * Generated per tool call rather than per retry, which is the useful half: the
+ * caller gets the key back in the response and can repeat the call with it if
+ * the outcome was unclear. Without that, a model whose finalize timed out has
+ * no safe move - calling again risks a second $1.00 charge and not calling
+ * risks abandoning a sealed deal.
+ */
+export function newIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
 /** Thrown when a tool needing a key is invoked without one configured. */
@@ -60,6 +82,7 @@ export class CogDepotClient {
       accept: "application/json",
     };
     if (options.body !== undefined) headers["content-type"] = "application/json";
+    if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
 
     let response: Response;
     try {

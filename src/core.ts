@@ -14,8 +14,12 @@ import * as z from "zod/v4";
 import { CogDepotClient } from "./client.js";
 import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
 import { registerAccountTools } from "./tools-account.js";
-import { registerDealTools } from "./tools-deals.js";
-import { registerMyListingsTool, registerPreviewTool } from "./tools-listings.js";
+import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
+import {
+  registerMeteredListingTools,
+  registerMyListingsTool,
+  registerPreviewTool,
+} from "./tools-listings.js";
 import {
   DESCRIPTION_DISCOVER,
   DESCRIPTION_GET_STARTED,
@@ -33,10 +37,19 @@ import {
 /**
  * Builds the server with every tool registered.
  *
- * `apiKey` is accepted but unused so far: only the free tools ship today. The
- * fee-incurring tools are deliberately absent until the connector-directory
- * eligibility question is answered, because building them before knowing
- * whether they are admissible is how the effort gets wasted.
+ * The tool set varies by one thing only: whether an API key is configured.
+ * Without one, the three keyless tools answer and nothing else is advertised,
+ * because a tool that can only fail is worse than an absent one.
+ *
+ * Tools that spend credits ship. They were absent through 0.1.4 behind a note
+ * about connector-directory eligibility, which turned out to be a design-time
+ * precaution from the first commit that had been repeated into eight files until
+ * it read as an external ruling. No ruling was ever sought or given. What
+ * governs them now is the real constraint - they cost the user money - and that
+ * is handled where it belongs: prices stated in the descriptions a model reads
+ * before calling, accurate destructive and read-only hints for hosts to prompt
+ * on, and an idempotency key on every mutating call so an ambiguous outcome is
+ * not resolved by charging twice.
  */
 export function buildServer(apiKey?: string): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
@@ -58,17 +71,21 @@ export function buildServer(apiKey?: string): McpServer {
     registerAccountTools(server, client);
     registerDealTools(server, client);
     registerMyListingsTool(server, client);
+
+    // The rest of the market: browsing, posting, negotiating and sealing. These
+    // are separated into their own registrars not because they are gated but
+    // because they are the ones that cost money, and a reader asking "what can
+    // this spend" should find the answer in one place.
+    registerMeteredListingTools(server, client);
+    registerNegotiationTools(server, client);
   }
 
-  // Absent by design: browse the metered feed, post, open thread, finalize.
-  // Every one spends credits, and whether a fee-incurring tool is admissible to
-  // the connector directory is an open question with the review team. Building
-  // them before the answer is how the work gets thrown away.
-  //
-  // The two listing tools above are not exceptions to that: the preview is
-  // unauthenticated and free, and /v1/listings/mine is explicitly unmetered.
-  // Neither can reach a listing this account did not post, and neither can spend
-  // a credit.
+  // Still absent, and this one is a real decision rather than an inherited one:
+  // POST /dashboard/credits, which tops up a balance. It moves actual money in,
+  // and its live description names Lightning and stablecoin rails - the same
+  // payment instructions errors.ts strips out of a 402 before a model can act on
+  // them. Buying credits is a thing a person does on the website, having decided
+  // to spend, not a thing an agent does mid-task.
 
   return server;
 }

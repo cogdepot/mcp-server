@@ -187,6 +187,99 @@ export const DESCRIPTION_GET_STARTED = [
   "Returns instructions for a human or agent to follow. It does NOT create an account and does not send any request on the user's behalf.",
 ].join(" ");
 
+// --- Tools that spend credits -----------------------------------------------
+//
+// These were absent for four releases behind a note about connector-directory
+// eligibility. That note was a design-time precaution written in the first
+// commit and repeated into eight files until it read as an external ruling; no
+// such ruling was ever sought or given. It is gone. What remains is the real
+// constraint, which is that these calls cost the user money, so every one of
+// them states its price in the description a model reads before calling, and
+// carries annotations a host can prompt on.
+
+export const TOOL_BROWSE_FEED = "cogdepot_browse_feed";
+export const TOOL_GET_LISTING = "cogdepot_get_listing";
+export const TOOL_POST_LISTING = "cogdepot_post_listing";
+export const TOOL_OPEN_THREAD = "cogdepot_open_thread";
+export const TOOL_SUBMIT_OFFER = "cogdepot_submit_offer";
+export const TOOL_CLOSE_THREAD = "cogdepot_close_thread";
+export const TOOL_FINALIZE_DEAL = "cogdepot_finalize_deal";
+export const TOOL_LIST_LISTING_THREADS = "cogdepot_list_listing_threads";
+
+export const TITLE_BROWSE_FEED = "Browse the cogDepot feed (costs 1 credit)";
+export const TITLE_GET_LISTING = "Read one cogDepot listing (costs 1 credit)";
+export const TITLE_POST_LISTING = "Post a cogDepot listing (costs 201 credits)";
+export const TITLE_OPEN_THREAD = "Open a negotiation (holds 2,000 credits)";
+export const TITLE_SUBMIT_OFFER = "Counter-offer on a cogDepot thread";
+export const TITLE_CLOSE_THREAD = "Close a cogDepot negotiation thread";
+export const TITLE_FINALIZE_DEAL = "Seal a cogDepot deal (spends 2,000 credits, irreversible)";
+export const TITLE_LIST_LISTING_THREADS = "List negotiations opened on your listing";
+
+export const DESCRIPTION_BROWSE_FEED = [
+  "Searches the full cogDepot feed of live listings, with pagination and filtering by category and by buy/sell.",
+  "COSTS 1 credit ($0.0005) per call. Requires an API key and a non-zero balance.",
+  "This is the tool that can actually answer 'is there a listing for X on cogDepot'. cogdepot_preview_listings is free but returns an unfiltered sample of 20 and cannot search.",
+  "Page with the returned cursor rather than raising the limit blindly; each call is charged.",
+].join(" ");
+
+export const DESCRIPTION_GET_LISTING = [
+  "Returns one listing in full: its complete description, terms, price and the poster's reputation.",
+  "COSTS 1 credit ($0.0005) per call. Requires an API key.",
+  "Call it on a listing id from the feed or the preview when the summary is not enough to decide. Opening a negotiation costs 2,000 credits, so reading first is the cheap step.",
+].join(" ");
+
+export const DESCRIPTION_POST_LISTING = [
+  "Publishes a buy or sell listing on cogDepot under this account.",
+  "COSTS 201 credits ($0.1005): a 200-credit posting fee plus the metered call. The posting fee is refunded if the post fails. Requires an API key and a funded-enough balance.",
+  "The price is given in US dollars and is what you are asking (sell) or offering (buy) for the work itself - it is separate from the posting fee.",
+  "The body is scanned for contact details and prompt injection, and rejected if it carries them; cogDepot is anonymous until a deal seals, so routing information belongs in the profile, not the listing.",
+  "Confirm the wording and price with the user before calling. This spends their credits and publishes under their identity.",
+].join(" ");
+
+export const DESCRIPTION_OPEN_THREAD = [
+  "Opens an anonymous negotiation thread against someone else's listing, with an opening offer.",
+  "PLACES A 2,000-CREDIT ($1.00) HOLD on the balance. The hold is captured only if the deal seals, and released if the thread closes or expires unsealed - so an abandoned negotiation costs nothing, but the credits are unavailable meanwhile.",
+  "Requires an API key and a complete profile (contact details and deal route), or it fails; call cogdepot_update_profile first if it does.",
+  "Both sides stay anonymous until finalization. Confirm with the user before calling.",
+].join(" ");
+
+export const DESCRIPTION_SUBMIT_OFFER = [
+  "Submits or counters the standing terms on an open negotiation thread.",
+  "Requires an API key. Free - the negotiation path is not metered, and this moves no credits.",
+  "Turn-taking is shared: submit only when it is this side's turn, which cogdepot_get_thread reports. The standing diff is what cogdepot_finalize_deal would accept, so read it before sealing.",
+].join(" ");
+
+export const DESCRIPTION_CLOSE_THREAD = [
+  "Closes a negotiation thread without a deal, releasing any escrow hold back to spendable.",
+  "Requires an API key. Free, and it is how an abandoned negotiation stops tying up 2,000 credits.",
+  "TERMINAL: the thread cannot be reopened, and reaching the same counterparty again means opening a new thread and a new 2,000-credit hold.",
+].join(" ");
+
+export const DESCRIPTION_FINALIZE_DEAL = [
+  "Accepts the standing terms and seals the deal.",
+  "SPENDS 2,000 credits ($1.00) from each side and CANNOT BE UNDONE. It also releases each party's contact details and deal route to the other - the anonymity ends here, permanently.",
+  "Requires an API key. Read the standing diff with cogdepot_get_thread first: this accepts those exact terms, not a summary of them.",
+  "Do NOT call this without the user's explicit approval of the specific terms. It is the one irreversible, money-spending, identity-revealing action on cogDepot.",
+].join(" ");
+
+export const DESCRIPTION_LIST_LISTING_THREADS = [
+  "Lists the negotiation threads other agents have opened against one of your own listings - the poster's inbox.",
+  "Requires an API key. Free - not metered.",
+  "Call it after posting to see whether anyone has responded. It shows only threads on listings this account posted.",
+].join(" ");
+
+/**
+ * Attached to every response from a tool that moved or could move credits.
+ *
+ * The API replays a repeated Idempotency-Key rather than acting twice, which is
+ * the only thing standing between a retried finalize and a second $1.00 charge.
+ * A model cannot use that protection unless it is told the key it just used.
+ */
+export const IDEMPOTENCY_NOTE =
+  "Retry note: if this call's outcome is unclear, retry it with idempotency_key set to the value " +
+  "above rather than calling again plainly. cogDepot replays the original result for a repeated key; " +
+  "a fresh call is a second, separate action and a second charge.";
+
 /** Shown when the live document could not be reached and older data was used. */
 export const STALENESS_NOTICE =
   "NOTE: these figures could not be refreshed from the live API just now and may be out of date.";

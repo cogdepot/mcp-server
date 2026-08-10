@@ -35,6 +35,34 @@ const KEYED_TOOLS = [
   "cogdepot_get_deal",
   "cogdepot_rate_deal",
   "cogdepot_get_my_listings",
+  "cogdepot_browse_feed",
+  "cogdepot_get_listing",
+  "cogdepot_post_listing",
+  "cogdepot_list_listing_threads",
+  "cogdepot_open_thread",
+  "cogdepot_submit_offer",
+  "cogdepot_close_thread",
+  "cogdepot_finalize_deal",
+];
+
+/**
+ * Tools this script must never invoke, because it runs against production with
+ * a real key and these spend real money or take irreversible action.
+ *
+ * Asserting they are REGISTERED is the point of the smoke test; calling them is
+ * not. A finalize here would charge $1.00 per side and reveal two parties'
+ * contact details, on every CI run.
+ *
+ * This is a denylist and denylists rot, so it is checked against the registered
+ * set below rather than trusted: anything registered that is not on the callable
+ * list is treated as unsafe to call, which fails closed for tools added later.
+ */
+const SAFE_TO_CALL = [
+  "cogdepot_discover",
+  "cogdepot_get_started",
+  "cogdepot_preview_listings",
+  "cogdepot_get_account",
+  "cogdepot_get_my_listings",
 ];
 
 const apiKey = process.env.COGDEPOT_API_KEY;
@@ -85,17 +113,59 @@ if (apiKey) {
   }
 }
 
-// No tool that spends credits may ship until the directory-eligibility question
-// is answered, and this is the guard that keeps that decision honest.
-//
-// It asserts the EXACT set, not the absence of five names it happens to know.
-// The earlier denylist would have passed a newly added `cogdepot_browse`, which
-// is exactly the tool it was supposed to stop. Pinning the set means any new
-// tool fails here until somebody adds it deliberately - at which point they have
-// to decide whether it costs the user money.
+// Pin the EXACT set rather than the absence of names this file happens to know.
+// An earlier denylist would have passed a newly added `cogdepot_browse`, which
+// was exactly the tool it was meant to catch. Pinning means any new tool fails
+// here until somebody adds it deliberately - and that moment is when they have
+// to decide whether it costs the user money and annotate it accordingly.
 const EXPECTED = [...REQUIRED_TOOLS, ...(apiKey ? KEYED_TOOLS : [])].sort();
 if (JSON.stringify(names) !== JSON.stringify(EXPECTED)) {
   fail(`unexpected tool set.\n  got:      ${names.join(", ")}\n  expected: ${EXPECTED.join(", ")}`);
+}
+
+// Fail closed: anything registered that this script has not explicitly cleared
+// as safe is treated as unsafe to call here, so a tool added later cannot be
+// swept into the call loop by someone extending REQUIRED_TOOLS.
+for (const name of REQUIRED_TOOLS) {
+  if (!SAFE_TO_CALL.includes(name)) {
+    fail(`${name} is in REQUIRED_TOOLS but not cleared as safe to call against production`);
+  }
+}
+
+// Every tool that moves credits must say so where a model will read it, and
+// must not claim to be read-only. This is the guard that replaced the
+// eligibility gate: the tools ship, and what is enforced is that they are
+// honest about the price before anything is spent.
+const SPENDS_CREDITS = [
+  "cogdepot_browse_feed", // 1 credit
+  "cogdepot_get_listing", // 1 credit
+  "cogdepot_post_listing", // 200 + 1
+  "cogdepot_open_thread", // 2000 held
+  "cogdepot_finalize_deal", // 2000 per side, captured
+];
+if (apiKey) {
+  for (const name of SPENDS_CREDITS) {
+    const tool = tools.find((t) => t.name === name);
+    if (!tool) {
+      fail(`${name} moves credits and must be registered with a key set`);
+      continue;
+    }
+    if (!/credit/i.test(tool.description ?? "")) {
+      fail(`${name} moves credits but its description never says the word`);
+    }
+    if (tool.annotations?.readOnlyHint === true) {
+      fail(`${name} moves credits but claims readOnlyHint: true`);
+    }
+  }
+  // The irreversible pair must be annotated so a host prompts before running
+  // them unattended. Getting this wrong is how a deal seals without anyone
+  // deciding to seal it.
+  for (const name of ["cogdepot_finalize_deal", "cogdepot_close_thread"]) {
+    const tool = tools.find((t) => t.name === name);
+    if (tool?.annotations?.destructiveHint !== true) {
+      fail(`${name} is irreversible but does not declare destructiveHint: true`);
+    }
+  }
 }
 
 for (const tool of tools) {

@@ -16,6 +16,14 @@ import {
   TOOL_VERIFY_DOMAIN,
   TOOL_GET_MY_LISTINGS,
   TOOL_PREVIEW_LISTINGS,
+  TOOL_BROWSE_FEED,
+  TOOL_GET_LISTING,
+  TOOL_POST_LISTING,
+  TOOL_LIST_LISTING_THREADS,
+  TOOL_OPEN_THREAD,
+  TOOL_SUBMIT_OFFER,
+  TOOL_CLOSE_THREAD,
+  TOOL_FINALIZE_DEAL,
 } from "./strings.js";
 
 const KEY = "test-key";
@@ -255,13 +263,12 @@ describe("keyed tools", () => {
     //
     // This previously listed the five fee-incurring tools and asserted their
     // absence, which enforced something weaker than the claim it backs: adding
-    // `cogdepot_browse` or `cogdepot_create_listing` would have passed, and the
-    // whole point is that no tool which spends credits ships until the
-    // directory-eligibility question is answered.
+    // `cogdepot_browse` or `cogdepot_create_listing` would have passed it.
     //
     // Pinning the exact set means ANY new tool fails here until somebody adds
     // it deliberately - and that moment is precisely when they have to decide
-    // whether it costs the user money.
+    // whether it costs the user money and annotate it truthfully. That is worth
+    // more now that spending tools ship than it was when they did not.
     vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }));
 
     const { client, close } = await connectWithKey();
@@ -280,6 +287,14 @@ describe("keyed tools", () => {
         TOOL_RATE_DEAL,
         TOOL_PREVIEW_LISTINGS,
         TOOL_GET_MY_LISTINGS,
+        TOOL_BROWSE_FEED,
+        TOOL_GET_LISTING,
+        TOOL_POST_LISTING,
+        TOOL_LIST_LISTING_THREADS,
+        TOOL_OPEN_THREAD,
+        TOOL_SUBMIT_OFFER,
+        TOOL_CLOSE_THREAD,
+        TOOL_FINALIZE_DEAL,
       ].sort(),
     );
     await close();

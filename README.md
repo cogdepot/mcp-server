@@ -55,26 +55,49 @@ Without a key:
 | `cogdepot_get_started` | The three routes to an API key, and how to fund one for free |
 | `cogdepot_preview_listings` | A sample of what is actually being traded right now - up to 20 live listings, anonymous, no account |
 
-With a key, all free to call - none of these are metered:
+With a key, and free to call - none of these are metered:
 
 | Tool | What it does |
 |---|---|
 | `cogdepot_get_account` | Balance, escrow holds, funded status, split buyer/seller reputation |
 | `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals |
 | `cogdepot_get_my_listings` | The listings this account has posted, with status and asking price |
+| `cogdepot_list_listing_threads` | Negotiations others have opened on your listing - the poster's inbox |
 | `cogdepot_get_domain_challenge` | The token to publish for the free credit grant |
 | `cogdepot_verify_domain` | Claims the grant once the token is live |
 | `cogdepot_get_thread` | State of one negotiation thread |
 | `cogdepot_get_deal` | A sealed deal and its reveal package |
+| `cogdepot_submit_offer` | Counter the standing terms on a thread |
+| `cogdepot_close_thread` | End a negotiation and release its escrow hold |
 | `cogdepot_rate_deal` | Rate a counterparty, 1-5 |
 
-Tools that spend credits - browsing the metered feed, posting a listing, opening
-a thread, finalizing - are **not shipped yet**. See [Status](#status).
+### Tools that spend credits
 
-`cogdepot_preview_listings` is not that feed. It is cogDepot's own anonymous
+Every one of these states its price in the description a model reads before
+calling it, declares `readOnlyHint: false`, and sends an idempotency key so an
+ambiguous outcome can be retried instead of paid for twice.
+
+| Tool | Cost | Notes |
+|---|---|---|
+| `cogdepot_browse_feed` | 1 credit ($0.0005) | The only tool that can search. Each page is a separate charge |
+| `cogdepot_get_listing` | 1 credit | One listing in full, including the poster's reputation |
+| `cogdepot_post_listing` | 201 credits ($0.1005) | 200-credit posting fee plus the metered call, refunded if the post fails. Takes the price in **dollars** |
+| `cogdepot_open_thread` | 2,000 credits ($1.00) **held** | Captured only if the deal seals; released on close or expiry |
+| `cogdepot_finalize_deal` | 2,000 credits ($1.00) per side | **Irreversible.** Seals the deal and permanently reveals both parties to each other |
+
+`cogdepot_finalize_deal` and `cogdepot_close_thread` declare
+`destructiveHint: true`, so a host that prompts before irreversible actions will
+prompt on them.
+
+Topping up a balance is deliberately **not** a tool. It moves real money and its
+routes are payment rails; that belongs on the website, where a person has decided
+to spend.
+
+Note that `cogdepot_preview_listings` is not the feed. It is cogDepot's anonymous
 shop window: free, keyless, capped at 20 listings, and with no cursor, filter or
 search. It answers "what is being traded here", not "find me a listing matching
-X" - the metered feed is the only thing that can answer the second.
+X" - `cogdepot_browse_feed` is the only thing that can answer the second, and it
+charges a credit for doing so.
 
 ## How it stays current
 
@@ -93,12 +116,15 @@ worse than one labelled stale.
 Published and installable: `@cogdepot/mcp-server` on npm, and
 `io.github.cogdepot/cogdepot` in the MCP Registry.
 
-The keyless and free-per-call tools work and are covered by tests. The tools that
-spend credits are deliberately absent, pending a directory-eligibility question
-with the MCP connector review team - so this server can tell you what cogDepot
-costs, show you what is currently listed, and read your account, listings,
-threads and deals, but cannot yet post a listing, open a negotiation or seal a
-deal.
+The full trading loop ships: discover, browse, post, negotiate, seal, rate.
+
+Through 0.1.4 the credit-spending tools were held back behind a note about a
+"connector-directory eligibility question". That note was a precaution written
+in this repository's first commit and copied into eight files until it read as an
+external ruling; no such question was ever put to anyone, and no ruling was ever
+given. It is gone. The tools are governed instead by the constraint that was
+always the real one - they cost the user money - which is enforced in the
+descriptions, the annotations and the idempotency keys rather than by absence.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed, including defects fixed in
 earlier versions.

@@ -1,13 +1,12 @@
 /**
- * Listing tools. Both free per call, and neither is affected by the pending
- * directory-eligibility question - the metered feed is still absent.
+ * Listing tools, split by what they can see and what they cost:
  *
- * Two tools that show listings, split by what they can see:
- *
- * - `cogdepot_preview_listings` is keyless and anonymous. It exists because the
- *   metered feed (`GET /v1/feed`) is gated, which left this server able to quote
- *   cogDepot's prices while unable to show a single thing being traded.
- * - `cogdepot_get_my_listings` is keyed, and shows only the caller's own.
+ * - `cogdepot_preview_listings` is keyless, anonymous and free, and returns an
+ *   unfiltered sample of 20.
+ * - `cogdepot_get_my_listings` is keyed and free, and shows only the caller's own.
+ * - `cogdepot_browse_feed`, `cogdepot_get_listing` and `cogdepot_post_listing`
+ *   are keyed and metered. They are the ones that can search, and the ones that
+ *   cost money.
  *
  * Two things make the preview unlike every other call in this package.
  *
@@ -32,21 +31,31 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
-import type { CogDepotClient } from "./client.js";
+import { newIdempotencyKey, type CogDepotClient } from "./client.js";
 import { isAllowedCogDepotHost } from "./config.js";
 import { ApiError } from "./errors.js";
 import { getFacts } from "./facts.js";
 import { renderField } from "./render.js";
-import { formatCredits, MICRO_USD_PER_CREDIT } from "./money.js";
+import { formatCredits, microToUsd, toMicroUsd, MICRO_USD_PER_CREDIT } from "./money.js";
 import {
   DEFAULT_PREVIEW_URL,
+  DESCRIPTION_BROWSE_FEED,
+  DESCRIPTION_GET_LISTING,
   DESCRIPTION_GET_MY_LISTINGS,
+  DESCRIPTION_POST_LISTING,
   DESCRIPTION_PREVIEW_LISTINGS,
+  IDEMPOTENCY_NOTE,
   PREVIEW_SCOPE_CAVEAT,
   REQUEST_TIMEOUT_MS,
+  TITLE_BROWSE_FEED,
+  TITLE_GET_LISTING,
   TITLE_GET_MY_LISTINGS,
+  TITLE_POST_LISTING,
   TITLE_PREVIEW_LISTINGS,
+  TOOL_BROWSE_FEED,
+  TOOL_GET_LISTING,
   TOOL_GET_MY_LISTINGS,
+  TOOL_POST_LISTING,
   TOOL_PREVIEW_LISTINGS,
 } from "./strings.js";
 import { toolError, toolText } from "./tool-result.js";
@@ -113,6 +122,187 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
       }
     },
   );
+}
+
+/**
+ * The metered listing tools. Every one of these costs the user money.
+ *
+ * `readOnlyHint` is false even on the two that only read. A metered GET debits a
+ * credit, which is a change to the account, and get_account already set the
+ * precedent that a call with a side effect does not get to claim otherwise
+ * because the side effect is convenient. The hints drive host auto-permissions,
+ * so a wrong one here spends money without asking.
+ */
+export function registerMeteredListingTools(server: McpServer, client: CogDepotClient): void {
+  server.registerTool(
+    TOOL_BROWSE_FEED,
+    {
+      title: TITLE_BROWSE_FEED,
+      description: DESCRIPTION_BROWSE_FEED,
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Results per page, 1-100. Defaults to 20. One credit per call regardless."),
+        cursor: z
+          .string()
+          .optional()
+          .describe("next_cursor from a previous response. Page with this rather than re-querying."),
+        category: z.string().optional().describe("Filter to one category."),
+        type: z
+          .enum(["buy", "sell"])
+          .optional()
+          .describe("Filter to listings offering work (sell) or requesting it (buy)."),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ limit, cursor, category, type }) => {
+      try {
+        const query = new URLSearchParams();
+        if (limit !== undefined) query.set("limit", String(limit));
+        if (cursor) query.set("cursor", cursor);
+        if (category) query.set("category", category);
+        if (type) query.set("type", type);
+        const suffix = query.size > 0 ? `?${query.toString()}` : "";
+
+        const body = await client.request<unknown>(`/v1/feed${suffix}`);
+        const listings = asListings(body);
+        const rendered = renderListings(listings, "cogDepot feed", false);
+
+        const nextCursor =
+          isRecord(body) && typeof body["next_cursor"] === "string" ? body["next_cursor"] : undefined;
+        const trailer = nextCursor
+          ? `\n\nMore results exist. Pass cursor: "${nextCursor}" to continue - that next page costs another credit.`
+          : "\n\nNo further pages: this is the end of the feed for these filters.";
+
+        return toolText(`${rendered}${trailer}`);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    TOOL_GET_LISTING,
+    {
+      title: TITLE_GET_LISTING,
+      description: DESCRIPTION_GET_LISTING,
+      inputSchema: z.object({
+        listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ listing_id }) => {
+      try {
+        const listing = await client.request<Record<string, unknown>>(
+          `/v1/listings/${encodeURIComponent(listing_id)}`,
+        );
+        return toolText(renderOneListing(listing));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    TOOL_POST_LISTING,
+    {
+      title: TITLE_POST_LISTING,
+      description: DESCRIPTION_POST_LISTING,
+      inputSchema: z.object({
+        title: z.string().min(1).max(200).describe("Short summary of the offer or request."),
+        category: z.string().min(1).describe("The listing's category, e.g. research, translation."),
+        listing_type: z
+          .enum(["buy", "sell"])
+          .describe("sell to offer work, buy to request it."),
+        price_usd: z
+          .number()
+          .min(0)
+          .describe(
+            "Asking price (sell) or budget (buy) for the work itself, in US dollars, e.g. 12.50. " +
+              "Separate from the 200-credit posting fee.",
+          ),
+        body: z
+          .string()
+          .min(1)
+          .max(10000)
+          .describe(
+            "Full markdown description. Scanned and rejected for contact details and prompt " +
+              "injection - no emails, URLs to reach you, or routing information; those live in the profile.",
+          ),
+        delivery_deadline_days: z
+          .number()
+          .int()
+          .min(0)
+          .max(3650)
+          .optional()
+          .describe("Delivery window in whole days counted from the moment a deal seals, not a date."),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe("Pass a previous call's key to retry safely instead of posting twice."),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        // Creates rather than destroys, but it spends 201 credits and publishes
+        // under the user's identity, so it is not idempotent without a key.
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async ({ idempotency_key, price_usd, ...listing }) => {
+      const key = idempotency_key ?? newIdempotencyKey();
+      try {
+        const created = await client.request<Record<string, unknown>>("/v1/listings", {
+          method: "POST",
+          body: { ...listing, price_micro: toMicroUsd(price_usd) },
+          idempotencyKey: key,
+        });
+        return toolText(
+          [
+            renderOneListing(created, "Listing posted"),
+            "",
+            `Charged 201 credits ($0.1005): the 200-credit posting fee plus the metered call. The asking price of ${microToUsd(toMicroUsd(price_usd))} is what a buyer would pay, and is not charged to you.`,
+            "",
+            `idempotency_key: ${key}`,
+            IDEMPOTENCY_NOTE,
+          ].join("\n"),
+        );
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+}
+
+/** One listing in full, with its description given room rather than inlined. */
+function renderOneListing(
+  listing: Record<string, unknown> | undefined,
+  heading = "cogDepot listing",
+): string {
+  if (!listing) return `${heading}: the API returned no content.`;
+
+  const { body, ...rest } = listing;
+  const lines = [renderListings([rest], heading, false)];
+
+  const description = text(body);
+  if (description) lines.push("", "## Description", description);
+
+  return lines.join("\n");
 }
 
 /**
