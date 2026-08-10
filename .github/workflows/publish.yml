@@ -61,6 +61,15 @@ jobs:
       - name: Smoke the built artefact before it is published
         run: node scripts/smoke.mjs
 
+      - name: Drift - the API and the bundled snapshot must still agree
+        # This also runs in verify.yml, but not on this path. The release
+        # workflow tags immediately after merging, so publish can start while
+        # the main-branch verify is still running - meaning a stale fallback
+        # snapshot or an uncovered endpoint could reach npm with the guard
+        # green somewhere else. Both checks read the LIVE API, so the only
+        # useful moment to run them is immediately before publishing.
+        run: npm run drift
+
       - name: Version must match the tag in all three places
         run: |
           set -euo pipefail

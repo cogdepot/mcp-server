@@ -52,6 +52,21 @@ describe("describeProblem", () => {
     expect(error.retryable).toBe(false);
   });
 
+  it("strips the crypto rails out of the live top-up pointer", () => {
+    // The live fact is "POST /dashboard/credits - Lightning or USDT/USDC on
+    // multiple chains." Passing it through whole would hand a model the crypto
+    // payment routes this mapping exists to strip from the x402 offer array,
+    // which is also the category both connector directories bar.
+    const error = describeProblem(
+      402,
+      asProblem({ reason: "insufficient_funds_self", creditsRemaining: 0, creditsRequired: 200 }),
+      "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains.",
+    );
+
+    expect(error.message).toContain("POST /dashboard/credits");
+    expect(error.message).not.toMatch(/Lightning|USDT|USDC|chains/);
+  });
+
   it("renders 428 next steps as numbered instructions rather than JSON", () => {
     const error = describeProblem(
       428,
@@ -68,6 +83,53 @@ describe("describeProblem", () => {
     expect(error.message).toContain("1. set_contact: PUT /v1/account/contact");
     expect(error.message).toContain("2. set_route: PUT /v1/account/route");
     expect(error.message).not.toContain("{");
+  });
+
+  it("keeps the API's own reassurance on a 428, verbatim", () => {
+    // Captured from staging on 2026-08-10. "No fee was taken" is the sentence a
+    // model needs most after a failed fee-bearing action, and a message rebuilt
+    // from `missing` and `next` alone cannot know it.
+    const error = describeProblem(
+      428,
+      asProblem({
+        reason: "profile_incomplete_self",
+        detail:
+          "Your account cannot enter a deal until its contact details and deal route are set. No fee was taken.",
+        missing: ["contact_name", "contact_email", "deal_route"],
+        next: [
+          { action: "set_contact", method: "PUT", path: "/v1/account/contact" },
+          { action: "set_route", method: "PUT", path: "/v1/account/route" },
+        ],
+      }),
+    );
+
+    expect(error.message).toContain("No fee was taken");
+    expect(error.message).toContain("Missing: contact_name, contact_email, deal_route");
+    expect(error.message).toContain("1. set_contact: PUT /v1/account/contact");
+  });
+
+  it("quotes the exact retry delay the API gives, rather than guessing", () => {
+    // Also captured from staging. The API states 3600; reconstructing "wait for
+    // the hour to roll over" throws away a number it handed us.
+    const error = describeProblem(
+      429,
+      asProblem({
+        reason: "rate_limited",
+        detail: "Too many registrations from this source. This is not a penalty and clears on its own.",
+        retryAfterSeconds: 3600,
+      }),
+    );
+
+    expect(error.message).toContain("3600 seconds");
+    expect(error.message).toContain("60 minutes");
+    expect(error.message).toContain("not a penalty");
+    expect(error.retryable).toBe(true);
+  });
+
+  it("still explains rate_limited when no delay is given", () => {
+    const error = describeProblem(429, asProblem({ reason: "rate_limited" }));
+    expect(error.message).toContain("clears when the hour rolls over");
+    expect(error.retryable).toBe(true);
   });
 
   it("treats rate_limited as retryable", () => {
@@ -88,6 +150,17 @@ describe("describeProblem", () => {
   it("explains that a missing deal may simply have been purged", () => {
     const error = describeProblem(404, asProblem({ reason: "not_found", detail: "deal not found" }));
     expect(error.message).toMatch(/purged 7 days/);
+  });
+
+  it("does not blame the purge window for a missing thread", () => {
+    // "It expired" and "that id is wrong" lead a model somewhere very
+    // different, and threads are not subject to the deal purge at all.
+    const error = describeProblem(
+      404,
+      asProblem({ reason: "not_found", detail: "thread not found" }),
+    );
+    expect(error.message).toContain("thread not found");
+    expect(error.message).not.toMatch(/purged/);
   });
 
   it("passes through the API's own prose for reason codes it has never seen", () => {
@@ -137,11 +210,36 @@ describe("describeProblem", () => {
 });
 
 describe("money", () => {
+  // Anchored on facts cogDepot publishes, NOT on this package's constant. The
+  // welcome credit is documented as 20,000 credits for $10.00, and the x402
+  // manifest sells 10,000 credits for $5.00. Both give 500 uUSD per credit.
+  // Asserting against the constant would just restate whatever it happens to
+  // say, which is exactly how the 0.1.2 tests passed with a 10x error in them.
+  const WELCOME_CREDIT_MICRO = 10_000_000; // $10.00
+  const WELCOME_CREDIT_CREDITS = 20_000;
+
+  it("reports the documented welcome credit as its documented credit count", () => {
+    const balance = describeBalance(WELCOME_CREDIT_MICRO, 0);
+    expect(balance.credits).toBe(WELCOME_CREDIT_CREDITS);
+    expect(balance.usd).toBe("$10.00");
+  });
+
+  it("agrees with the x402 manifest's credit pack", () => {
+    // 10,000 credits for $5.00.
+    const balance = describeBalance(5_000_000, 0);
+    expect(balance.credits).toBe(10_000);
+    expect(balance.usd).toBe("$5.00");
+  });
+
+  it("prices a deal fee at the documented 2000 credits for $1.00", () => {
+    expect(formatCredits(2_000)).toBe("2,000 credits ($1.00)");
+  });
+
   it("converts uUSD to credits and dollars", () => {
     const balance = describeBalance(20_000_000, 100_000);
-    expect(balance.credits).toBe(400_000);
+    expect(balance.credits).toBe(40_000);
     expect(balance.usd).toBe("$20.00");
-    expect(balance.heldCredits).toBe(2_000);
+    expect(balance.heldCredits).toBe(200);
     expect(balance.heldUsd).toBe("$0.10");
   });
 
@@ -151,8 +249,8 @@ describe("money", () => {
     expect(balance.usd).toBe("$0.00");
   });
 
-  it("formats a credit quantity with its dollar value", () => {
-    expect(formatCredits(2000)).toBe("2,000 credits ($0.10)");
+  it("formats the listing fee, 200 credits, at its documented $0.10", () => {
+    expect(formatCredits(200)).toBe("200 credits ($0.10)");
   });
 
   it("flags a repriced credit rather than converting at a stale rate", () => {
@@ -195,6 +293,27 @@ describe("renderAccount", () => {
 
   it("handles an empty account record", () => {
     expect(renderAccount(undefined, undefined)).toMatch(/empty account record/);
+  });
+
+  it("shows n/a rather than NaN when a facet carries no ratings", () => {
+    const text = renderAccount(
+      {
+        balance_micro: 0,
+        held_micro: 0,
+        reputation: { buyer: { rating_sum: 0, rating_count: 0, finalized_count: 0 } },
+      },
+      "1 credit = $0.0005 USD",
+    );
+    expect(text).toContain("n/a");
+    expect(text).not.toContain("NaN");
+  });
+
+  it("renders a reputation value that is not an object", () => {
+    const text = renderAccount(
+      { balance_micro: 0, held_micro: 0, reputation: { domain_verified: false } },
+      "1 credit = $0.0005 USD",
+    );
+    expect(text).toContain("domain_verified: false");
   });
 });
 

@@ -26,7 +26,37 @@ import {
   TOOL_GET_THREAD,
   TOOL_RATE_DEAL,
 } from "./strings.js";
+import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
+
+/**
+ * Drops top-level fields that repeat a value already inside `reveal`.
+ *
+ * A real sealed deal returns the ~500-character PASETO credential twice: once at
+ * the top level and again inside the reveal package. Printing both puts the same
+ * deal-scoped secret in a model's context twice, doubling both the token cost
+ * and the number of places it can be copied out of.
+ *
+ * `reveal` is the half that survives, because it is the package a caller is told
+ * to store, and truncating it would defeat the instruction to keep it. Only
+ * exact value matches are removed, so a top-level field that genuinely differs
+ * from its reveal namesake is left alone.
+ */
+export function withoutRevealDuplicates(
+  deal: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!deal) return deal;
+  const reveal = deal["reveal"];
+  if (typeof reveal !== "object" || reveal === null || Array.isArray(reveal)) return deal;
+
+  const inner = reveal as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(deal)) {
+    if (key !== "reveal" && key in inner && inner[key] === value) continue;
+    out[key] = value;
+  }
+  return out;
+}
 
 export function registerDealTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
@@ -49,7 +79,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
         const thread = await client.request<Record<string, unknown>>(
           `/v1/threads/${encodeURIComponent(thread_id)}`,
         );
-        return toolText(renderJson("Negotiation thread", thread));
+        return toolText(renderRecord("Negotiation thread", thread));
       } catch (error) {
         return toolError(error);
       }
@@ -77,7 +107,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
           `/v1/deals/${encodeURIComponent(deal_id)}`,
         );
         return toolText(
-          `${renderJson("Sealed deal", deal)}\n\n` +
+          `${renderRecord("Sealed deal", withoutRevealDuplicates(deal))}\n\n` +
             "This reveal is available for 7 days after the deal sealed, then the record is purged " +
             "and only aggregate reputation survives. Store anything you need now.",
         );
@@ -132,27 +162,3 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
   );
 }
 
-/**
- * Renders a response as readable lines, falling back to JSON only for nested
- * structures. Directory review rejects generic dumps, and a model reads prose
- * more reliably than it reads a brace soup.
- */
-function renderJson(heading: string, body: Record<string, unknown> | undefined): string {
-  if (!body) return `${heading}: the API returned no content.`;
-  const lines = [`# ${heading}`];
-  for (const [key, value] of Object.entries(body)) {
-    if (value === null || value === undefined) continue;
-    if (typeof value === "object") {
-      lines.push(`- **${key}**:`);
-      lines.push(
-        JSON.stringify(value, null, 2)
-          .split("\n")
-          .map((line) => `    ${line}`)
-          .join("\n"),
-      );
-    } else {
-      lines.push(`- **${key}**: ${String(value)}`);
-    }
-  }
-  return lines.join("\n");
-}

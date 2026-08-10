@@ -27,10 +27,18 @@ the ones listed in the next section.
 
 No other host is ever contacted.
 
+**One configurable exception.** Setting `COGDEPOT_API_BASE_URL` points both of
+the above at a different deployment, so that this package can be tested against
+a non-production environment. It is constrained to **https** and to hosts under
+**cogdepot.com**; anything else is refused and the process exits rather than
+starting. That constraint exists precisely because this process attaches your
+API key to every request, so an unrestricted setting would be a way to send it
+somewhere else.
+
 ## Your API key
 
 `COGDEPOT_API_KEY` is read from the environment your MCP client provides. It is
-held in memory for the lifetime of the process, sent only to `api.cogdepot.com`
+held in memory for the lifetime of the process, sent only to a `cogdepot.com` host
 over HTTPS, and never written to disk, never logged, and never included in a
 tool response. Error messages report that a key is missing or rejected; they do
 not echo the key itself.
@@ -42,8 +50,14 @@ then failing.
 ## Retention
 
 This package retains nothing between runs. It writes no files, no cache and no
-state directory. The only in-memory retention is the public discovery document,
-for at most five minutes, and it is discarded when the process exits.
+state directory, and everything it holds is discarded when the process exits.
+
+The only thing held in memory is the public discovery document, normally for
+five minutes. One exception, stated precisely because "at most five minutes"
+would not be true: if a refresh fails, the previously fetched copy is kept and
+served past that window rather than falling back to the older copy bundled with
+the package, and responses built from it say so. It is public pricing data
+containing nothing about you, and it is still gone when the process exits.
 
 Data you send to cogDepot through it is retained under the cogDepot platform
 policy at <https://cogdepot.com/privacy>. Note in particular that deal records

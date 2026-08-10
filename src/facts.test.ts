@@ -80,6 +80,36 @@ describe("getFacts", () => {
     expect(after.facts.credits?.["dealFee"]).toBe("2500 credits ($1.25) per side");
   });
 
+  it("shares one round trip between concurrent cold-start callers", async () => {
+    // Several tools resolving at once on a cold cache must not each fetch the
+    // same public document.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse(discoveryDocument("2000 credits")));
+
+    const [a, b, c] = await Promise.all([getFacts(), getFacts(), getFacts()]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect([a.facts, b.facts, c.facts].every((f) => f.credits?.["dealFee"] === "2000 credits")).toBe(
+      true,
+    );
+  });
+
+  it("does not pin later callers to a failed in-flight fetch", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("first attempt failed"))
+      .mockResolvedValue(jsonResponse(discoveryDocument("2000 credits")));
+
+    const first = await getFacts();
+    expect(first.provenance).toBe("snapshot");
+
+    // The in-flight slot must have been cleared, so this retries for real.
+    const second = await getFacts();
+    expect(second.provenance).toBe("live");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("falls back to the bundled snapshot when the network fails and nothing is cached", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("getaddrinfo ENOTFOUND"));
 

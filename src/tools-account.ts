@@ -29,8 +29,10 @@ import {
   TOOL_GET_DOMAIN_CHALLENGE,
   TOOL_UPDATE_PROFILE,
   TOOL_VERIFY_DOMAIN,
+  MONEY_GATED_REPUTATION_CAVEAT,
   WARM_START_CAVEAT,
 } from "./strings.js";
+import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
 interface AccountResponse {
@@ -63,7 +65,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
     async () => {
       try {
         const account = await client.request<AccountResponse>("/v1/account");
-        return toolText(renderAccount(account, await currentMeteredCallText()));
+        return toolText(renderAccount(account, await currentRateText()));
       } catch (error) {
         return toolError(error);
       }
@@ -77,15 +79,27 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       description: DESCRIPTION_UPDATE_PROFILE,
       inputSchema: z.object({
         contact_name: z.string().min(1).describe("Operator name, released only after a deal seals"),
+        // Validate at the boundary rather than letting the API reject it. A
+        // model that gets "invalid email" back from a schema can fix it and
+        // retry; one that gets a 400 from a write it thought would succeed has
+        // to work out which of four fields was wrong.
         contact_email: z
           .string()
-          .min(3)
+          .email()
           .describe("Operator email, released only after a deal seals"),
+        // https only, not merely a URL. The API requires it, and `.url()` alone
+        // would happily accept an http:// route that then fails server-side.
         deal_route: z
           .string()
           .url()
+          .startsWith("https://", "must be an https URL")
           .describe("Your https route base for per-deal contact, released only after a deal seals"),
-        contact_url: z.string().url().optional().describe("Optional https contact URL"),
+        contact_url: z
+          .string()
+          .url()
+          .startsWith("https://", "must be an https URL")
+          .optional()
+          .describe("Optional https contact URL"),
       }),
       annotations: {
         readOnlyHint: false,
@@ -95,6 +109,13 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       },
     },
     async ({ contact_name, contact_email, deal_route, contact_url }) => {
+      // Two endpoints, one tool. They cannot be written atomically, so the
+      // partial outcome has to be reported rather than hidden: if the contact
+      // write lands and the route write fails, a bare error would tell the
+      // caller nothing was saved when half of it was, and a retry would look
+      // like it was starting from scratch. Both writes are idempotent, so
+      // retrying is safe - the caller just needs to know where it got to.
+      let contactWritten = false;
       try {
         await client.request("/v1/account/contact", {
           method: "PUT",
@@ -104,16 +125,33 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
             ...(contact_url === undefined ? {} : { contact_url }),
           },
         });
+        contactWritten = true;
+
         await client.request("/v1/account/route", {
           method: "PUT",
           body: { deal_route },
         });
+
         return toolText(
           "Profile updated. Contact details and deal route are stored and will be released to a " +
             "counterparty only after a deal seals. Opening and receiving threads is now unblocked.",
         );
       } catch (error) {
-        return toolError(error);
+        const partial = toolError(error);
+        if (!contactWritten) return partial;
+        return {
+          ...partial,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `Partly applied: the contact details WERE saved, the deal route was NOT.\n\n` +
+                `${partial.content[0]?.text ?? ""}\n\n` +
+                "Re-running this tool is safe - both writes are idempotent. Until the route is " +
+                "set, opening and receiving threads stays blocked.",
+            },
+          ],
+        };
       }
     },
   );
@@ -172,7 +210,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
 /** Renders an account without ever exposing a µUSD figure. */
 export function renderAccount(
   account: AccountResponse | undefined,
-  meteredCallText: unknown,
+  rateText: unknown,
 ): string {
   if (!account) return "The API returned an empty account record.";
 
@@ -192,6 +230,9 @@ export function renderAccount(
         const facet = value as Record<string, unknown>;
         const sum = Number(facet["rating_sum"] ?? 0);
         const count = Number(facet["rating_count"] ?? 0);
+        // `count` is 0 only if the warm-start rating is absent, which the API
+        // never does today - but a mean of NaN is a worse thing to show a model
+        // than "n/a", so the guard stays and is covered by a test.
         const mean = count > 0 ? (sum / count).toFixed(1) : "n/a";
         const real = Math.max(0, count - 1);
         lines.push(
@@ -202,10 +243,10 @@ export function renderAccount(
         lines.push(`- ${role}: ${String(value)}`);
       }
     }
-    lines.push("", WARM_START_CAVEAT);
+    lines.push("", WARM_START_CAVEAT, "", MONEY_GATED_REPUTATION_CAVEAT);
   }
 
-  if (!creditRateLooksCurrent(meteredCallText)) {
+  if (!creditRateLooksCurrent(rateText)) {
     lines.push(
       "",
       "WARNING: the live pricing text no longer states $0.0005 per credit, so the dollar figures " +
@@ -216,18 +257,18 @@ export function renderAccount(
   return lines.join("\n");
 }
 
-/** Generic key/value rendering for the small responses. */
-function renderRecord(heading: string, body: Record<string, unknown> | undefined): string {
-  if (!body) return `${heading}: the API returned no content.`;
-  const lines = [`# ${heading}`];
-  for (const [key, value] of Object.entries(body)) {
-    lines.push(`- **${key}**: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
-  }
-  return lines.join("\n");
-}
 
-/** The live metered-call sentence, used to sanity-check the credit rate. */
-async function currentMeteredCallText(): Promise<unknown> {
+/**
+ * The live statement of the credit rate, used to sanity-check the constant this
+ * package converts with.
+ *
+ * Prefers `credits.unit` - "1 credit = $0.0005 USD" - which is the canonical
+ * statement, and falls back to the metered-call sentence, which mentions the
+ * same figure incidentally. If cogDepot ever reprices a credit, converting at
+ * the old rate would produce confidently wrong dollar figures, which is the
+ * worst failure available here.
+ */
+async function currentRateText(): Promise<unknown> {
   const { facts } = await getFacts();
-  return facts.credits?.["meteredCall"];
+  return facts.credits?.["unit"] ?? facts.credits?.["meteredCall"];
 }

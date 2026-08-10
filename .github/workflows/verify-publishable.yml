@@ -24,21 +24,34 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Refuse internal planning documents by filename
+      - name: Only known-public markdown may exist here
         run: |
           set -euo pipefail
-          PATTERN='(^|/)(mcp-server-plan|EXECUTION|PRD|TDD|COSTS|DESIGN|LANDING_REDESIGN|VISION-REMEDIATION|chance-history|feedback-improvement-plan|x402-integration-plan|directory-submission[^/]*|[^/]*-submissions-log|marketing-[^/]*)\.md$'
-          BAD=$(git ls-files | grep -iE "$PATTERN" || true)
+
+          # An ALLOWLIST, deliberately, after the denylist version failed.
+          #
+          # That version enumerated the internal documents that existed when it
+          # was written. Two created afterwards - the review plan and the org
+          # migration runbook - sailed straight through it, and one of those
+          # carries AWS account ids, OIDC subject claims and role names. A
+          # denylist protects against the files you already thought of, which is
+          # the wrong half: the dangerous file is the one nobody has written yet.
+          #
+          # Adding a public document is a deliberate act and should cost one line
+          # here. Copying an internal one in should fail.
+          ALLOWED='^(README|PRIVACY|CHANGELOG|LICENSE|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT)\.md$'
+
+          BAD=$(git ls-files '*.md' | grep -vE "$ALLOWED" || true)
           if [ -n "$BAD" ]; then
-            echo "::error::Internal planning documents must not be committed to the public repository."
+            echo "::error::Markdown file(s) not on the public allowlist:"
             echo "$BAD"
             echo ""
-            echo "These belong in the private planning repository. If a public document"
-            echo "genuinely needs one of these names, rename it rather than weakening"
-            echo "this check."
+            echo "This repository is public. Internal planning documents belong in the"
+            echo "private repository. If this file really is meant to be public, add its"
+            echo "name to ALLOWED in this workflow - deliberately, in its own commit."
             exit 1
           fi
-          echo "OK - no internal planning documents by filename"
+          echo "OK - every markdown file is on the public allowlist"
 
       - name: Refuse references to the private repository
         run: |

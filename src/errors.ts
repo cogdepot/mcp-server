@@ -24,6 +24,7 @@ export interface ProblemDocument {
   readonly reason?: string;
   readonly creditsRemaining?: number;
   readonly creditsRequired?: number;
+  readonly retryAfterSeconds?: number;
   readonly missing?: readonly string[];
   readonly next?: readonly { action?: string; method?: string; path?: string }[];
   readonly [key: string]: unknown;
@@ -69,7 +70,13 @@ export function describeProblem(
       const have = numeric(problem.creditsRemaining) ?? 0;
       const need = numeric(problem.creditsRequired) ?? 0;
       const shortfall = Math.max(0, need - have);
-      const topUp = topUpUrl ? ` Top up at ${topUpUrl}.` : "";
+      // Take only the route, not the whole sentence. The live fact reads
+      // "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains",
+      // and passing that through would hand a model the crypto payment routes
+      // this mapping exists to strip from the x402 `accepts` array. Splitting
+      // on the dash keeps the pointer live-sourced without the payload.
+      const route = topUpUrl?.split(" - ")[0]?.trim();
+      const topUp = route ? ` Top up with ${route}.` : "";
       return new ApiError(
         status,
         reason,
@@ -81,6 +88,10 @@ export function describeProblem(
     }
 
     case "profile_incomplete_self": {
+      // The API's own detail carries something the reconstructed message cannot
+      // know and a model badly needs: "No fee was taken." A 428 on a fee-bearing
+      // action leaves a model guessing whether it was charged, and a defensive
+      // guess is the expensive one. Keep the API's sentence, then add the steps.
       // The API already names the exact calls to make. Render them as steps
       // rather than as JSON, which is the difference between a model fixing
       // this by itself and a model apologising to the user.
@@ -92,24 +103,34 @@ export function describeProblem(
         })
         .join("\n");
       const missing = (problem.missing ?? []).join(", ");
+      const detail = text(problem.detail);
       return new ApiError(
         status,
         reason,
-        `This account is not set up yet${missing ? ` - missing ${missing}` : ""}.` +
+        (detail ?? `This account is not set up yet${missing ? ` - missing ${missing}` : ""}.`) +
+          (detail && missing ? ` Missing: ${missing}.` : "") +
           (steps ? `\nComplete it with:\n${steps}` : "") +
           `\ncogdepot_update_profile does this in one call.`,
         false,
       );
     }
 
-    case "rate_limited":
+    case "rate_limited": {
+      // The API states the wait exactly. Reconstructing "wait for the hour to
+      // roll over" from the reason code throws that away and leaves a model
+      // guessing at a number it was handed.
+      const retryAfter = numeric(problem.retryAfterSeconds);
+      const wait = retryAfter
+        ? ` Retry after ${retryAfter} seconds (about ${Math.round(retryAfter / 60)} minutes).`
+        : " It clears when the hour rolls over.";
       return new ApiError(
         status,
         reason,
-        "Rate limited on a free route. This is not a penalty and it clears when the hour rolls over. " +
-          "Wait rather than retrying immediately.",
+        `${text(problem.detail) ?? "Rate limited on a free route. This is not a penalty."}${wait}` +
+          " Wait rather than retrying immediately.",
         true,
       );
+    }
 
     case "too_many_violations":
       // Deliberately NOT retryable. This is an abuse counter, and advising a
@@ -131,14 +152,17 @@ export function describeProblem(
         false,
       );
 
-    case "not_found":
-      return new ApiError(
-        status,
-        reason,
-        `Not found: ${problem.detail ?? "the requested record does not exist"}. ` +
-          "Deal records are purged 7 days after reveal, so an older deal id returns this rather than data.",
-        false,
-      );
+    case "not_found": {
+      const detail = text(problem.detail) ?? "the requested record does not exist";
+      // Only mention the purge when the missing thing is actually a deal.
+      // Attaching it to a missing thread sends a model looking for an
+      // explanation that does not apply, and "it expired" is a very different
+      // conclusion from "that id is wrong".
+      const purgeNote = /deal/i.test(detail)
+        ? " Deal records are purged 7 days after reveal, so an older deal id returns this rather than data."
+        : "";
+      return new ApiError(status, reason, `Not found: ${detail}.${purgeNote}`, false);
+    }
 
     default: {
       // Unknown reason codes will happen - the API ships new ones ahead of this

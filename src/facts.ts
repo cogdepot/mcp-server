@@ -14,7 +14,8 @@
  */
 
 import snapshot from "./facts-snapshot.json" with { type: "json" };
-import { DISCOVERY_URL, FACTS_TTL_MS, FACTS_FETCH_TIMEOUT_MS } from "./strings.js";
+import { getDiscoveryUrl } from "./config.js";
+import { FACTS_TTL_MS, FACTS_FETCH_TIMEOUT_MS } from "./strings.js";
 
 /**
  * The subset of `/.well-known/cogdepot.json` this server relies on. Deliberately
@@ -59,9 +60,20 @@ interface CacheEntry {
 
 let cache: CacheEntry | undefined;
 
+/**
+ * The fetch currently in flight, if any.
+ *
+ * Without this, a cold start where several tools resolve at once sends several
+ * identical requests for the same public document. Sharing one promise makes
+ * concurrent callers wait on the same round trip instead of racing to overwrite
+ * the same cache entry.
+ */
+let inFlight: Promise<CogDepotFacts> | undefined;
+
 /** Test seam. Resets module state so each case starts from a known point. */
 export function resetFactsCacheForTesting(): void {
   cache = undefined;
+  inFlight = undefined;
 }
 
 /**
@@ -80,7 +92,13 @@ export async function getFacts(now: () => number = Date.now): Promise<FactsResul
   }
 
   try {
-    const facts = await fetchFacts();
+    // Share one round trip between concurrent callers, and clear the slot in a
+    // finally so a failed fetch cannot pin every later caller to the same
+    // rejection.
+    inFlight ??= fetchFacts().finally(() => {
+      inFlight = undefined;
+    });
+    const facts = await inFlight;
     cache = { facts, fetchedAtMs: now() };
     return { facts, provenance: "live" };
   } catch (error) {
@@ -102,13 +120,13 @@ export async function getFacts(now: () => number = Date.now): Promise<FactsResul
 
 /** Fetches and validates the discovery document. Throws on any failure. */
 async function fetchFacts(): Promise<CogDepotFacts> {
-  const response = await fetch(DISCOVERY_URL, {
+  const response = await fetch(getDiscoveryUrl(), {
     signal: AbortSignal.timeout(FACTS_FETCH_TIMEOUT_MS),
     headers: { accept: "application/json" },
   });
 
   if (!response.ok) {
-    throw new FactsFetchError(`${DISCOVERY_URL} returned HTTP ${response.status}`);
+    throw new FactsFetchError(`${getDiscoveryUrl()} returned HTTP ${response.status}`);
   }
 
   const body: unknown = await response.json();
@@ -117,11 +135,11 @@ async function fetchFacts(): Promise<CogDepotFacts> {
   // misrouted CDN is the realistic failure, and it must fall back rather than
   // become a "facts" object with no fields that silently reports no prices.
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new FactsFetchError(`${DISCOVERY_URL} returned a non-object body`);
+    throw new FactsFetchError(`${getDiscoveryUrl()} returned a non-object body`);
   }
   if (!("apiBaseUrl" in body) && !("credits" in body)) {
     throw new FactsFetchError(
-      `${DISCOVERY_URL} returned JSON without apiBaseUrl or credits, so it is not the discovery document`,
+      `${getDiscoveryUrl()} returned JSON without apiBaseUrl or credits, so it is not the discovery document`,
     );
   }
 
@@ -142,9 +160,9 @@ function describeFetchFailure(error: unknown): string {
   if (error instanceof FactsFetchError) return error.message;
   if (error instanceof Error) {
     if (error.name === "TimeoutError") {
-      return `${DISCOVERY_URL} did not respond within ${FACTS_FETCH_TIMEOUT_MS}ms`;
+      return `${getDiscoveryUrl()} did not respond within ${FACTS_FETCH_TIMEOUT_MS}ms`;
     }
-    return `${DISCOVERY_URL} could not be reached: ${error.message}`;
+    return `${getDiscoveryUrl()} could not be reached: ${error.message}`;
   }
-  return `${DISCOVERY_URL} could not be reached`;
+  return `${getDiscoveryUrl()} could not be reached`;
 }

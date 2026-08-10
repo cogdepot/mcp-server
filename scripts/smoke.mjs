@@ -41,9 +41,18 @@ const transport = new StdioClientTransport({
   args: ["dist/stdio.js"],
   // Without a key this exercises the zero-configuration path, which is the
   // property under test in CI. With one, the keyed half is covered too.
+  // Every variable the server reads must be forwarded explicitly. An allowlist
+  // that does not know about a new one fails in the most misleading way
+  // available: the child silently runs with the default, and the feature looks
+  // broken rather than unforwarded. That is exactly what happened the first
+  // time COGDEPOT_API_BASE_URL was added - a staging key went to production and
+  // came back 401.
   env: {
     PATH: process.env.PATH ?? "",
     ...(apiKey ? { COGDEPOT_API_KEY: apiKey } : {}),
+    ...(process.env.COGDEPOT_API_BASE_URL
+      ? { COGDEPOT_API_BASE_URL: process.env.COGDEPOT_API_BASE_URL }
+      : {}),
   },
 });
 
@@ -69,12 +78,16 @@ if (apiKey) {
 }
 
 // No tool that spends credits may ship until the directory-eligibility question
-// is answered. This guard is the mechanism that keeps that decision honest.
-const GATED = ["search_listings", "get_listing", "post_listing", "open_thread", "finalize_deal"];
-for (const gated of GATED) {
-  if (names.some((n) => n.endsWith(gated))) {
-    fail(`cogdepot_${gated} is registered but fee-incurring tools are still gated`);
-  }
+// is answered, and this is the guard that keeps that decision honest.
+//
+// It asserts the EXACT set, not the absence of five names it happens to know.
+// The earlier denylist would have passed a newly added `cogdepot_browse`, which
+// is exactly the tool it was supposed to stop. Pinning the set means any new
+// tool fails here until somebody adds it deliberately - at which point they have
+// to decide whether it costs the user money.
+const EXPECTED = [...REQUIRED_TOOLS, ...(apiKey ? KEYED_TOOLS : [])].sort();
+if (JSON.stringify(names) !== JSON.stringify(EXPECTED)) {
+  fail(`unexpected tool set.\n  got:      ${names.join(", ")}\n  expected: ${EXPECTED.join(", ")}`);
 }
 
 for (const tool of tools) {
@@ -89,6 +102,7 @@ for (const name of REQUIRED_TOOLS) {
   const result = await client.callTool({ name, arguments: {} });
   const text = (result.content ?? []).map((c) => c.text ?? "").join("");
   if (result.isError) fail(`${name} returned isError`);
+  if (/_micro/.test(text)) fail(`${name} leaked a raw uUSD field name`);
   if (text.trim().length === 0) fail(`${name} returned empty content`);
   console.log(`${name} -> ${text.length} chars, first line: ${text.split("\n")[0]}`);
 

@@ -38,6 +38,13 @@ To use the account tools as well, add your key:
 Getting a key takes one unauthenticated request and costs nothing - ask the
 `cogdepot_get_started` tool, or see <https://cogdepot.com>.
 
+### Environment variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the two discovery tools; the account tools are not advertised at all, rather than offered and then failing |
+| `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
+
 ## Tools
 
 Without a key:
@@ -79,6 +86,15 @@ worse than one labelled stale.
 Early. The keyless and free-per-call tools work and are covered by tests; the
 fee-incurring tools are deliberately absent pending a directory-eligibility
 question with the MCP connector review team. Not yet published to npm.
+
+## Support and security
+
+Bugs and questions: [open an issue](https://github.com/cogdepot/mcp-server/issues).
+
+**Security problems: email security@cogdepot.com, not a public issue.** This
+package holds your cogDepot API key, so a disclosure in public reaches everyone
+still running the affected version before a fix exists. See
+[SECURITY.md](SECURITY.md).
 
 ## Privacy
 

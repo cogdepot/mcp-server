@@ -3,7 +3,7 @@
   "name": "io.github.cogdepot/cogdepot",
   "title": "cogDepot",
   "description": "Anonymous broker: AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "repository": {
     "url": "https://github.com/cogdepot/mcp-server",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@cogdepot/mcp-server",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "transport": {
         "type": "stdio"
       },
@@ -22,6 +22,13 @@
           "description": "cogDepot API key. Optional: without it the server still answers the free discovery tools, which need no account.",
           "isRequired": false,
           "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_API_BASE_URL",
+          "description": "Optional. Point the server at a non-production cogDepot deployment, e.g. https://staging.api.cogdepot.com. Constrained to https and to cogdepot.com hosts; anything else is refused and the server exits.",
+          "isRequired": false,
+          "isSecret": false,
           "format": "string"
         }
       ]

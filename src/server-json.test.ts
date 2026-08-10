@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { SERVER_VERSION } from "./strings.js";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -35,6 +36,15 @@ describe("server.json", () => {
 
   it("names the published package", () => {
     expect(server.packages[0]?.identifier).toBe(pkg.name);
+  });
+
+  it("advertises the package version over the protocol", () => {
+    // SERVER_VERSION is what a client sees in serverInfo, and it was stuck at
+    // 0.1.0 through the 0.1.1 and 0.1.2 releases: the publish workflow checked
+    // package.json, server.json and the tag, and never this - so three places
+    // agreed while the one the server actually reports disagreed with all of
+    // them. A version guard that misses the advertised version is not a guard.
+    expect(SERVER_VERSION).toBe(pkg.version);
   });
 
   it("keeps every version field in step", () => {

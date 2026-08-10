@@ -70,6 +70,43 @@ const EXCLUDED = {
   // spec never offers, which is the stale-entry warning below.
 };
 
+// Cross-check the other direction first: every tool this file claims covers an
+// endpoint must actually be registered. Without this the guard is half a guard -
+// it notices the API growing, but deleting a tool would leave COVERED asserting
+// a name that no longer exists and the check would still pass.
+// Asked over the real protocol rather than by reading an SDK internal: an
+// underscore-prefixed field is not a contract, and a check that breaks on an
+// SDK upgrade is a check that gets disabled.
+const { buildServer } = await import("../dist/core.js");
+const { Client } = await import("@modelcontextprotocol/client");
+const { InMemoryTransport } = await import("@modelcontextprotocol/server");
+
+const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+const driftClient = new Client({ name: "drift", version: "0.0.0" });
+await Promise.all([
+  buildServer("drift-check-not-a-real-key").connect(serverTransport),
+  driftClient.connect(clientTransport),
+]);
+const { tools } = await driftClient.listTools();
+await driftClient.close();
+
+const registered = new Set(tools.map((t) => t.name));
+
+if (registered.size === 0) {
+  console.error("drift: the server registered no tools - is dist/ built?");
+  process.exit(1);
+}
+
+const missingTools = [...new Set(Object.values(COVERED))].filter((t) => !registered.has(t));
+if (missingTools.length > 0) {
+  console.error("drift: COVERED names tools that are not registered:");
+  for (const t of missingTools) console.error(`  - ${t}`);
+  console.error("");
+  console.error("Either the tool was removed and this file was not updated, or it was renamed.");
+  process.exit(1);
+}
+console.log(`drift: ${registered.size} tools registered, all names in COVERED resolve`);
+
 const response = await fetch(OPENAPI_URL, { headers: { accept: "application/json" } });
 if (!response.ok) {
   console.error(`drift: could not fetch ${OPENAPI_URL} (HTTP ${response.status})`);
@@ -109,3 +146,39 @@ if (undecided.length > 0) {
 }
 
 console.log("drift: OK - every live operation is either covered or explicitly excluded");
+
+// --- the bundled snapshot ---------------------------------------------------
+// src/facts-snapshot.json is the fallback served when the live document cannot
+// be reached, and it is frozen at whatever moment somebody last ran a fetch.
+// Nothing else notices it going stale, so a release months from now would ship
+// months-old prices as its fallback and label them merely "not live".
+//
+// Only the credits block is compared. The rest of the document carries long
+// prose that gets reworded without changing any fact, and a guard that cries
+// wolf on a copy edit is a guard that gets bypassed. Prices are the part where
+// stale means wrong.
+const { readFileSync } = await import("node:fs");
+const snapshot = JSON.parse(readFileSync("src/facts-snapshot.json", "utf8"));
+
+const discoveryResponse = await fetch("https://api.cogdepot.com/.well-known/cogdepot.json", {
+  headers: { accept: "application/json" },
+});
+if (!discoveryResponse.ok) {
+  console.warn(`drift: could not fetch the discovery document (HTTP ${discoveryResponse.status})`);
+  console.warn("drift: skipping the snapshot freshness check - unknown, not stale");
+} else {
+  const liveDoc = await discoveryResponse.json();
+  const snapCredits = JSON.stringify(snapshot.credits ?? {});
+  const liveCredits = JSON.stringify(liveDoc.credits ?? {});
+
+  if (snapCredits !== liveCredits) {
+    console.error("");
+    console.error("drift: the bundled snapshot's pricing no longer matches the live document.");
+    console.error("Refresh it before releasing:");
+    console.error(
+      "  curl -s https://api.cogdepot.com/.well-known/cogdepot.json -o src/facts-snapshot.json",
+    );
+    process.exit(1);
+  }
+  console.log("drift: OK - the bundled snapshot's pricing matches the live document");
+}

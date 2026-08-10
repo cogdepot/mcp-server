@@ -5,6 +5,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { buildServer } from "./core.js";
 import { resetFactsCacheForTesting } from "./facts.js";
 import {
+  TOOL_DISCOVER,
+  TOOL_GET_STARTED,
   TOOL_GET_ACCOUNT,
   TOOL_GET_DEAL,
   TOOL_GET_DOMAIN_CHALLENGE,
@@ -92,7 +94,9 @@ describe("keyed tools", () => {
     const { text, isError } = await callText(client, TOOL_GET_ACCOUNT);
 
     expect(isError).toBe(false);
-    expect(text).toContain("20,000 credits");
+    // 1,000,000 uUSD is $1.00, which at 500 uUSD/credit is 2,000 credits -
+    // the documented per-side deal fee.
+    expect(text).toContain("2,000 credits");
     expect(text).toContain("($1.00)");
     expect(text).not.toMatch(/_micro/);
     expect(text).toMatch(/synthetic/);
@@ -244,16 +248,36 @@ describe("keyed tools", () => {
     await close();
   });
 
-  it("ships no fee-incurring tool while the eligibility question is open", async () => {
+  it("registers exactly the expected tools and nothing else", async () => {
+    // An EXACT set, not a denylist of forbidden names.
+    //
+    // This previously listed the five fee-incurring tools and asserted their
+    // absence, which enforced something weaker than the claim it backs: adding
+    // `cogdepot_browse` or `cogdepot_create_listing` would have passed, and the
+    // whole point is that no tool which spends credits ships until the
+    // directory-eligibility question is answered.
+    //
+    // Pinning the exact set means ANY new tool fails here until somebody adds
+    // it deliberately - and that moment is precisely when they have to decide
+    // whether it costs the user money.
     vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }));
 
     const { client, close } = await connectWithKey();
     const { tools } = await client.listTools();
-    const names = tools.map((t) => t.name);
 
-    for (const gated of ["search_listings", "get_listing", "post_listing", "open_thread", "finalize_deal"]) {
-      expect(names.some((n) => n.endsWith(gated))).toBe(false);
-    }
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      [
+        TOOL_DISCOVER,
+        TOOL_GET_STARTED,
+        TOOL_GET_ACCOUNT,
+        TOOL_UPDATE_PROFILE,
+        TOOL_GET_DOMAIN_CHALLENGE,
+        TOOL_VERIFY_DOMAIN,
+        TOOL_GET_THREAD,
+        TOOL_GET_DEAL,
+        TOOL_RATE_DEAL,
+      ].sort(),
+    );
     await close();
   });
 
@@ -353,6 +377,209 @@ describe("keyed tools", () => {
 
     const body = String((fetchImpl.mock.calls.at(-1)?.[1] as RequestInit)?.body);
     expect(body).toContain('"delivered":false');
+    await close();
+  });
+
+  it("says which half landed when the profile write partly fails", async () => {
+    // Two endpoints, one tool, no atomicity. A bare error would tell the caller
+    // nothing was saved when the contact details were.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account/contact": { status: 204 },
+        "/v1/account/route": { status: 500, body: { reason: "internal", detail: "route write failed" } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text, isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+      contact_name: "n",
+      contact_email: "e@e.com",
+      deal_route: "https://e.com/d",
+    });
+
+    expect(isError).toBe(true);
+    expect(text).toContain("contact details WERE saved");
+    expect(text).toContain("deal route was NOT");
+    expect(text).toMatch(/idempotent/);
+    await close();
+  });
+
+  it("does not report a partial write when the first call is the one that fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account/contact": { status: 500, body: { reason: "internal", detail: "nope" } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text, isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+      contact_name: "n",
+      contact_email: "e@e.com",
+      deal_route: "https://e.com/d",
+    });
+
+    expect(isError).toBe(true);
+    expect(text).not.toContain("WERE saved");
+    await close();
+  });
+
+  it("never shows a raw uUSD figure on a thread or a deal", async () => {
+    // The account renderer guarded this from the start; the thread and deal
+    // renderers did not, which is how `amount_micro: 1000000` reached a model.
+    // 1,000,000 uUSD is $1.00 and 2,000 credits - a model reading the raw
+    // number as a quantity is the same confusion that produced the 0.1.2 bug.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/threads/": { status: 200, body: { id: "t1", status: "open", amount_micro: 1_000_000 } },
+        "/v1/deals/": { status: 200, body: { id: "d1", amount_micro: 1_000_000 } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+
+    const thread = await callText(client, TOOL_GET_THREAD, { thread_id: "t1" });
+    expect(thread.text).not.toMatch(/_micro/);
+    expect(thread.text).toContain("2,000 credits ($1.00)");
+
+    const deal = await callText(client, TOOL_GET_DEAL, { deal_id: "d1" });
+    expect(deal.text).not.toMatch(/_micro/);
+    expect(deal.text).toContain("2,000 credits ($1.00)");
+    await close();
+  });
+
+  it("labels the truncated thread_id so it is not mistaken for an id", async () => {
+    // The API returns a 13-character prefix under a name that looks like the
+    // path parameter. Relaying it unlabelled hands a model a broken identifier.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/threads/": {
+          status: 200,
+          body: { id: "aeb24c7c-2f28-4d12-b378-a4bad822f3da", thread_id: "aeb24c7c-2f2" },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_THREAD, { thread_id: "x" });
+
+    expect(text).toMatch(/NOT usable as an id/);
+    expect(text).toContain("aeb24c7c-2f28-4d12-b378-a4bad822f3da");
+    await close();
+  });
+
+  it("prints a deal credential once, not twice", async () => {
+    // A real sealed deal returns the ~500-character PASETO credential at the top
+    // level AND inside reveal. Printing both doubles the token cost and the
+    // number of places a deal-scoped secret can be copied out of.
+    const CREDENTIAL = "v4.public.AAAA-a-very-long-paseto-token-BBBB";
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/deals/": {
+          status: 200,
+          body: {
+            id: "3b418937",
+            status: "active",
+            credential: CREDENTIAL,
+            credential_kid: "c1fb2107011d8b96",
+            amount_micro: 1_000_000,
+            reveal: {
+              counterparty_endpoint: "https://cogdepot.com/x",
+              credential: CREDENTIAL,
+              credential_kid: "c1fb2107011d8b96",
+            },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_DEAL, { deal_id: "3b418937" });
+
+    expect(text.split(CREDENTIAL).length - 1).toBe(1);
+    // The reveal package is the half that survives, since it is what the caller
+    // is told to store.
+    expect(text).toContain("counterparty_endpoint");
+    // Fields that are not duplicated must survive - and the amount is now
+    // rendered in credits rather than as a raw uUSD figure.
+    expect(text).toContain("3b418937");
+    expect(text).toContain("2,000 credits ($1.00)");
+    await close();
+  });
+
+  it("leaves a top-level field alone when it differs from its reveal namesake", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/deals/": {
+          status: 200,
+          body: {
+            id: "d1",
+            credential: "outer-value",
+            reveal: { credential: "inner-value" },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_DEAL, { deal_id: "d1" });
+
+    expect(text).toContain("outer-value");
+    expect(text).toContain("inner-value");
+    await close();
+  });
+
+  it("explains that reputation counters are money-gated", async () => {
+    // Verified on staging: an account that sealed a paid deal still reported
+    // finalized_count 0, because both sides were welcome-credit funded. Without
+    // saying so, a model concludes the deal failed.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account": {
+          status: 200,
+          body: {
+            balance_micro: 8_799_000,
+            held_micro: 0,
+            reputation: { seller: { rating_sum: 5, rating_count: 1, finalized_count: 0 } },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_ACCOUNT);
+
+    expect(text).toMatch(/paid real money/);
+    expect(text).toMatch(/does NOT mean the deal failed/);
+    await close();
+  });
+
+  it("reads the discovery document only for the error that quotes a top-up route", async () => {
+    // Fetching it on every failure put a network call on every error path.
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/v1/threads/": { status: 401, body: { reason: "unauthorized", detail: "no" } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+    await callText(client, TOOL_GET_THREAD, { thread_id: "t1" });
+
+    const discoveryCalls = fetchImpl.mock.calls.filter((c) => String(c[0]).includes("cogdepot.json"));
+    expect(discoveryCalls).toHaveLength(0);
     await close();
   });
 

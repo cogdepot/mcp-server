@@ -9,7 +9,8 @@
 
 import { ApiError, asProblem, describeProblem } from "./errors.js";
 import { getFacts } from "./facts.js";
-import { API_BASE_URL, REQUEST_TIMEOUT_MS } from "./strings.js";
+import { getApiBaseUrl } from "./config.js";
+import { REQUEST_TIMEOUT_MS } from "./strings.js";
 
 export interface RequestOptions {
   readonly method?: "GET" | "POST" | "PUT";
@@ -33,7 +34,7 @@ export class CogDepotClient {
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
 
-  constructor(apiKey?: string, baseUrl: string = API_BASE_URL, fetchImpl: typeof fetch = fetch) {
+  constructor(apiKey?: string, baseUrl: string = getApiBaseUrl(), fetchImpl: typeof fetch = fetch) {
     this.#apiKey = apiKey?.trim() || undefined;
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
     this.#fetch = fetchImpl;
@@ -81,20 +82,30 @@ export class CogDepotClient {
     const raw: unknown = await response.json().catch(() => undefined);
 
     if (!response.ok) {
-      // The top-up pointer comes from live facts so it cannot drift from what
-      // the platform serves. Failing to read them must not mask the real error.
-      let topUpUrl: string | undefined;
-      try {
-        const { facts } = await getFacts();
-        topUpUrl = typeof facts.credits?.["topUp"] === "string"
-          ? (facts.credits["topUp"] as string)
-          : undefined;
-      } catch {
-        topUpUrl = undefined;
-      }
-      throw describeProblem(response.status, asProblem(raw), topUpUrl);
+      const problem = asProblem(raw);
+      // Fetch the top-up pointer only for the one reason that uses it. Doing it
+      // on every failure put a network call on every error path, including a
+      // cold-cache round trip inside the handling of a 401 - latency added to
+      // failures, for a value the message would then discard.
+      const needsTopUp = problem.reason === "insufficient_funds_self";
+      throw describeProblem(response.status, problem, needsTopUp ? await topUpPointer() : undefined);
     }
 
     return raw as T;
   }
+}
+
+/**
+ * The live top-up route, or undefined if the document does not state one.
+ *
+ * No try/catch here on purpose. `getFacts` is documented as never throwing - an
+ * unreachable document degrades to the bundled snapshot - so wrapping this call
+ * would add a branch no test can reach and no failure can enter. Defensive code
+ * that cannot fire is not safety, it is a permanently untested path that makes
+ * the coverage number mean less than it says.
+ */
+async function topUpPointer(): Promise<string | undefined> {
+  const { facts } = await getFacts();
+  const topUp = facts.credits?.["topUp"];
+  return typeof topUp === "string" ? topUp : undefined;
 }
