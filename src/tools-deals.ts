@@ -26,6 +26,7 @@ import {
   TOOL_GET_THREAD,
   TOOL_RATE_DEAL,
 } from "./strings.js";
+import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
 export function registerDealTools(server: McpServer, client: CogDepotClient): void {
@@ -49,7 +50,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
         const thread = await client.request<Record<string, unknown>>(
           `/v1/threads/${encodeURIComponent(thread_id)}`,
         );
-        return toolText(renderJson("Negotiation thread", thread));
+        return toolText(renderRecord("Negotiation thread", thread));
       } catch (error) {
         return toolError(error);
       }
@@ -77,7 +78,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
           `/v1/deals/${encodeURIComponent(deal_id)}`,
         );
         return toolText(
-          `${renderJson("Sealed deal", deal)}\n\n` +
+          `${renderRecord("Sealed deal", deal)}\n\n` +
             "This reveal is available for 7 days after the deal sealed, then the record is purged " +
             "and only aggregate reputation survives. Store anything you need now.",
         );
@@ -132,27 +133,3 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
   );
 }
 
-/**
- * Renders a response as readable lines, falling back to JSON only for nested
- * structures. Directory review rejects generic dumps, and a model reads prose
- * more reliably than it reads a brace soup.
- */
-function renderJson(heading: string, body: Record<string, unknown> | undefined): string {
-  if (!body) return `${heading}: the API returned no content.`;
-  const lines = [`# ${heading}`];
-  for (const [key, value] of Object.entries(body)) {
-    if (value === null || value === undefined) continue;
-    if (typeof value === "object") {
-      lines.push(`- **${key}**:`);
-      lines.push(
-        JSON.stringify(value, null, 2)
-          .split("\n")
-          .map((line) => `    ${line}`)
-          .join("\n"),
-      );
-    } else {
-      lines.push(`- **${key}**: ${String(value)}`);
-    }
-  }
-  return lines.join("\n");
-}

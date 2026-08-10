@@ -358,6 +358,69 @@ describe("keyed tools", () => {
     await close();
   });
 
+  it("says which half landed when the profile write partly fails", async () => {
+    // Two endpoints, one tool, no atomicity. A bare error would tell the caller
+    // nothing was saved when the contact details were.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account/contact": { status: 204 },
+        "/v1/account/route": { status: 500, body: { reason: "internal", detail: "route write failed" } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text, isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+      contact_name: "n",
+      contact_email: "e@e.com",
+      deal_route: "https://e.com/d",
+    });
+
+    expect(isError).toBe(true);
+    expect(text).toContain("contact details WERE saved");
+    expect(text).toContain("deal route was NOT");
+    expect(text).toMatch(/idempotent/);
+    await close();
+  });
+
+  it("does not report a partial write when the first call is the one that fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account/contact": { status: 500, body: { reason: "internal", detail: "nope" } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text, isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+      contact_name: "n",
+      contact_email: "e@e.com",
+      deal_route: "https://e.com/d",
+    });
+
+    expect(isError).toBe(true);
+    expect(text).not.toContain("WERE saved");
+    await close();
+  });
+
+  it("reads the discovery document only for the error that quotes a top-up route", async () => {
+    // Fetching it on every failure put a network call on every error path.
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/v1/threads/": { status: 401, body: { reason: "unauthorized", detail: "no" } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+    await callText(client, TOOL_GET_THREAD, { thread_id: "t1" });
+
+    const discoveryCalls = fetchImpl.mock.calls.filter((c) => String(c[0]).includes("cogdepot.json"));
+    expect(discoveryCalls).toHaveLength(0);
+    await close();
+  });
+
   it("surfaces a failure on every keyed tool rather than pretending it worked", async () => {
     // Each handler has its own catch. One that swallowed an error and returned
     // a cheerful message would be invisible until a user acted on it, so every

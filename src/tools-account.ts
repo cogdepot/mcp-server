@@ -31,6 +31,7 @@ import {
   TOOL_VERIFY_DOMAIN,
   WARM_START_CAVEAT,
 } from "./strings.js";
+import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
 interface AccountResponse {
@@ -95,6 +96,13 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       },
     },
     async ({ contact_name, contact_email, deal_route, contact_url }) => {
+      // Two endpoints, one tool. They cannot be written atomically, so the
+      // partial outcome has to be reported rather than hidden: if the contact
+      // write lands and the route write fails, a bare error would tell the
+      // caller nothing was saved when half of it was, and a retry would look
+      // like it was starting from scratch. Both writes are idempotent, so
+      // retrying is safe - the caller just needs to know where it got to.
+      let contactWritten = false;
       try {
         await client.request("/v1/account/contact", {
           method: "PUT",
@@ -104,16 +112,33 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
             ...(contact_url === undefined ? {} : { contact_url }),
           },
         });
+        contactWritten = true;
+
         await client.request("/v1/account/route", {
           method: "PUT",
           body: { deal_route },
         });
+
         return toolText(
           "Profile updated. Contact details and deal route are stored and will be released to a " +
             "counterparty only after a deal seals. Opening and receiving threads is now unblocked.",
         );
       } catch (error) {
-        return toolError(error);
+        const partial = toolError(error);
+        if (!contactWritten) return partial;
+        return {
+          ...partial,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `Partly applied: the contact details WERE saved, the deal route was NOT.\n\n` +
+                `${partial.content[0]?.text ?? ""}\n\n` +
+                "Re-running this tool is safe - both writes are idempotent. Until the route is " +
+                "set, opening and receiving threads stays blocked.",
+            },
+          ],
+        };
       }
     },
   );
@@ -192,6 +217,9 @@ export function renderAccount(
         const facet = value as Record<string, unknown>;
         const sum = Number(facet["rating_sum"] ?? 0);
         const count = Number(facet["rating_count"] ?? 0);
+        // `count` is 0 only if the warm-start rating is absent, which the API
+        // never does today - but a mean of NaN is a worse thing to show a model
+        // than "n/a", so the guard stays and is covered by a test.
         const mean = count > 0 ? (sum / count).toFixed(1) : "n/a";
         const real = Math.max(0, count - 1);
         lines.push(
@@ -216,15 +244,6 @@ export function renderAccount(
   return lines.join("\n");
 }
 
-/** Generic key/value rendering for the small responses. */
-function renderRecord(heading: string, body: Record<string, unknown> | undefined): string {
-  if (!body) return `${heading}: the API returned no content.`;
-  const lines = [`# ${heading}`];
-  for (const [key, value] of Object.entries(body)) {
-    lines.push(`- **${key}**: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
-  }
-  return lines.join("\n");
-}
 
 /**
  * The live statement of the credit rate, used to sanity-check the constant this

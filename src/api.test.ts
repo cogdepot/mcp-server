@@ -236,6 +236,27 @@ describe("renderAccount", () => {
   it("handles an empty account record", () => {
     expect(renderAccount(undefined, undefined)).toMatch(/empty account record/);
   });
+
+  it("shows n/a rather than NaN when a facet carries no ratings", () => {
+    const text = renderAccount(
+      {
+        balance_micro: 0,
+        held_micro: 0,
+        reputation: { buyer: { rating_sum: 0, rating_count: 0, finalized_count: 0 } },
+      },
+      "1 credit = $0.0005 USD",
+    );
+    expect(text).toContain("n/a");
+    expect(text).not.toContain("NaN");
+  });
+
+  it("renders a reputation value that is not an object", () => {
+    const text = renderAccount(
+      { balance_micro: 0, held_micro: 0, reputation: { domain_verified: false } },
+      "1 credit = $0.0005 USD",
+    );
+    expect(text).toContain("domain_verified: false");
+  });
 });
 
 describe("CogDepotClient", () => {

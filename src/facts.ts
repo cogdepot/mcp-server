@@ -59,9 +59,20 @@ interface CacheEntry {
 
 let cache: CacheEntry | undefined;
 
+/**
+ * The fetch currently in flight, if any.
+ *
+ * Without this, a cold start where several tools resolve at once sends several
+ * identical requests for the same public document. Sharing one promise makes
+ * concurrent callers wait on the same round trip instead of racing to overwrite
+ * the same cache entry.
+ */
+let inFlight: Promise<CogDepotFacts> | undefined;
+
 /** Test seam. Resets module state so each case starts from a known point. */
 export function resetFactsCacheForTesting(): void {
   cache = undefined;
+  inFlight = undefined;
 }
 
 /**
@@ -80,7 +91,13 @@ export async function getFacts(now: () => number = Date.now): Promise<FactsResul
   }
 
   try {
-    const facts = await fetchFacts();
+    // Share one round trip between concurrent callers, and clear the slot in a
+    // finally so a failed fetch cannot pin every later caller to the same
+    // rejection.
+    inFlight ??= fetchFacts().finally(() => {
+      inFlight = undefined;
+    });
+    const facts = await inFlight;
     cache = { facts, fetchedAtMs: now() };
     return { facts, provenance: "live" };
   } catch (error) {
