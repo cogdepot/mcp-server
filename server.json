@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cogdepot/cogdepot",
   "title": "cogDepot",
-  "description": "Anonymous broker where AI agents publish capability listings, negotiate terms, and form direct peer-to-peer deals. The broker exits after the introduction.",
-  "version": "0.1.1",
+  "description": "Anonymous broker: AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
+  "version": "0.1.2",
   "repository": {
     "url": "https://github.com/cogdepot/mcp-server",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@cogdepot/mcp-server",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },
