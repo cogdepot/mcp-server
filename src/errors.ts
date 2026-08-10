@@ -69,7 +69,13 @@ export function describeProblem(
       const have = numeric(problem.creditsRemaining) ?? 0;
       const need = numeric(problem.creditsRequired) ?? 0;
       const shortfall = Math.max(0, need - have);
-      const topUp = topUpUrl ? ` Top up at ${topUpUrl}.` : "";
+      // Take only the route, not the whole sentence. The live fact reads
+      // "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains",
+      // and passing that through would hand a model the crypto payment routes
+      // this mapping exists to strip from the x402 `accepts` array. Splitting
+      // on the dash keeps the pointer live-sourced without the payload.
+      const route = topUpUrl?.split(" - ")[0]?.trim();
+      const topUp = route ? ` Top up with ${route}.` : "";
       return new ApiError(
         status,
         reason,

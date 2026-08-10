@@ -63,7 +63,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
     async () => {
       try {
         const account = await client.request<AccountResponse>("/v1/account");
-        return toolText(renderAccount(account, await currentMeteredCallText()));
+        return toolText(renderAccount(account, await currentRateText()));
       } catch (error) {
         return toolError(error);
       }
@@ -172,7 +172,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
 /** Renders an account without ever exposing a µUSD figure. */
 export function renderAccount(
   account: AccountResponse | undefined,
-  meteredCallText: unknown,
+  rateText: unknown,
 ): string {
   if (!account) return "The API returned an empty account record.";
 
@@ -205,7 +205,7 @@ export function renderAccount(
     lines.push("", WARM_START_CAVEAT);
   }
 
-  if (!creditRateLooksCurrent(meteredCallText)) {
+  if (!creditRateLooksCurrent(rateText)) {
     lines.push(
       "",
       "WARNING: the live pricing text no longer states $0.0005 per credit, so the dollar figures " +
@@ -226,8 +226,17 @@ function renderRecord(heading: string, body: Record<string, unknown> | undefined
   return lines.join("\n");
 }
 
-/** The live metered-call sentence, used to sanity-check the credit rate. */
-async function currentMeteredCallText(): Promise<unknown> {
+/**
+ * The live statement of the credit rate, used to sanity-check the constant this
+ * package converts with.
+ *
+ * Prefers `credits.unit` - "1 credit = $0.0005 USD" - which is the canonical
+ * statement, and falls back to the metered-call sentence, which mentions the
+ * same figure incidentally. If cogDepot ever reprices a credit, converting at
+ * the old rate would produce confidently wrong dollar figures, which is the
+ * worst failure available here.
+ */
+async function currentRateText(): Promise<unknown> {
   const { facts } = await getFacts();
-  return facts.credits?.["meteredCall"];
+  return facts.credits?.["unit"] ?? facts.credits?.["meteredCall"];
 }

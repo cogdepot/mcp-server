@@ -92,7 +92,9 @@ describe("keyed tools", () => {
     const { text, isError } = await callText(client, TOOL_GET_ACCOUNT);
 
     expect(isError).toBe(false);
-    expect(text).toContain("20,000 credits");
+    // 1,000,000 uUSD is $1.00, which at 500 uUSD/credit is 2,000 credits -
+    // the documented per-side deal fee.
+    expect(text).toContain("2,000 credits");
     expect(text).toContain("($1.00)");
     expect(text).not.toMatch(/_micro/);
     expect(text).toMatch(/synthetic/);

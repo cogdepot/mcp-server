@@ -15,8 +15,22 @@
  * assumed - see `assertCreditRate`.
  */
 
-/** µUSD per credit. 1 credit = $0.0005. */
-export const MICRO_USD_PER_CREDIT = 50;
+/**
+ * µUSD per credit. 1 credit = $0.0005 = 500 µUSD.
+ *
+ * This was 50 in 0.1.2 and that was wrong by a factor of ten: it reported a
+ * funded account's $10.00 welcome credit as 200,000 credits instead of 20,000,
+ * while the dollar figure stayed correct, so the output looked internally
+ * consistent. Three independent sources agree on 500 - the API's own
+ * `internal/config/money.go`, the welcome credit (10,000,000 µUSD for 20,000
+ * credits), and the x402 manifest (5,000,000 µUSD for 10,000 credits).
+ *
+ * The tests below derive the rate from a documented credit/dollar pair rather
+ * than restating this constant. The 0.1.2 tests asserted the buggy output, so
+ * they passed and proved nothing - a test written from the same wrong premise
+ * as the code is not a check, it is an echo.
+ */
+export const MICRO_USD_PER_CREDIT = 500;
 
 export interface Balance {
   readonly credits: number;
@@ -52,10 +66,9 @@ export function formatCredits(credits: number): string {
  * wording is prose and may be rephrased, and refusing to answer because a
  * sentence changed would be worse than the risk it guards.
  */
-export function creditRateLooksCurrent(meteredCallText: unknown): boolean {
-  if (typeof meteredCallText !== "string") return true;
-  if (!/\$0\.0005/.test(meteredCallText)) return false;
-  return true;
+export function creditRateLooksCurrent(rateText: unknown): boolean {
+  if (typeof rateText !== "string") return true;
+  return /\$0\.0005/.test(rateText);
 }
 
 function micro(value: unknown): number {
