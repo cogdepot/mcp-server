@@ -15,7 +15,8 @@
   "types": "dist/core.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "PRIVACY.md"
   ],
   "repository": {
     "type": "git",
