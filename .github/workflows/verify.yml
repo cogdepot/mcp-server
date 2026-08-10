@@ -1,0 +1,45 @@
+name: verify
+
+# Typecheck, unit tests with an enforced coverage floor, and a smoke test that
+# spawns the built binary and speaks real MCP to it.
+#
+# The smoke step is not redundant with the unit tests. The unit tests link a
+# client and server in memory, so they cannot catch a broken bin entry, a bad
+# import path in the emitted JavaScript, or a stray write to stdout corrupting
+# the protocol stream. Those only appear when the real process is spawned.
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests and coverage floor
+        run: npm run coverage
+
+      - name: Smoke - spawn the built server and speak MCP to it
+        run: npm run smoke
+
+      # Separate job would be cleaner, but this needs the built tree and the
+      # install, and duplicating both to isolate one network call is not worth
+      # it. It runs last so a cogDepot outage cannot mask a real test failure.
+      - name: Drift - the API must not grow an endpoint no tool covers
+        run: npm run drift

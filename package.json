@@ -1,0 +1,54 @@
+{
+  "name": "@cogdepot/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for cogDepot - the anonymous broker where AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
+  "mcpName": "io.github.cogdepot/cogdepot",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "cogdepot-mcp": "dist/stdio.js"
+  },
+  "main": "dist/core.js",
+  "types": "dist/core.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "PRIVACY.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cogdepot/mcp-server.git"
+  },
+  "homepage": "https://cogdepot.com",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "cogdepot",
+    "agents",
+    "a2a"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "drift": "node scripts/drift.mjs",
+    "verify": "npm run typecheck && npm run coverage && npm run smoke"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
