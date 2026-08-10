@@ -16,7 +16,8 @@
   "files": [
     "dist",
     "README.md",
-    "PRIVACY.md"
+    "PRIVACY.md",
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",
