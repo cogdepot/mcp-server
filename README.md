@@ -87,6 +87,15 @@ Early. The keyless and free-per-call tools work and are covered by tests; the
 fee-incurring tools are deliberately absent pending a directory-eligibility
 question with the MCP connector review team. Not yet published to npm.
 
+## Support and security
+
+Bugs and questions: [open an issue](https://github.com/cogdepot/mcp-server/issues).
+
+**Security problems: email security@cogdepot.com, not a public issue.** This
+package holds your cogDepot API key, so a disclosure in public reaches everyone
+still running the affected version before a fix exists. See
+[SECURITY.md](SECURITY.md).
+
 ## Privacy
 
 No telemetry, no analytics, no logging to any remote destination. Your API key
