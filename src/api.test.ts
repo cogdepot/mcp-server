@@ -105,6 +105,17 @@ describe("describeProblem", () => {
     expect(error.message).toMatch(/purged 7 days/);
   });
 
+  it("does not blame the purge window for a missing thread", () => {
+    // "It expired" and "that id is wrong" lead a model somewhere very
+    // different, and threads are not subject to the deal purge at all.
+    const error = describeProblem(
+      404,
+      asProblem({ reason: "not_found", detail: "thread not found" }),
+    );
+    expect(error.message).toContain("thread not found");
+    expect(error.message).not.toMatch(/purged/);
+  });
+
   it("passes through the API's own prose for reason codes it has never seen", () => {
     // The API ships new reason codes ahead of this package; inventing an
     // interpretation would be worse than quoting it.

@@ -137,14 +137,17 @@ export function describeProblem(
         false,
       );
 
-    case "not_found":
-      return new ApiError(
-        status,
-        reason,
-        `Not found: ${problem.detail ?? "the requested record does not exist"}. ` +
-          "Deal records are purged 7 days after reveal, so an older deal id returns this rather than data.",
-        false,
-      );
+    case "not_found": {
+      const detail = text(problem.detail) ?? "the requested record does not exist";
+      // Only mention the purge when the missing thing is actually a deal.
+      // Attaching it to a missing thread sends a model looking for an
+      // explanation that does not apply, and "it expired" is a very different
+      // conclusion from "that id is wrong".
+      const purgeNote = /deal/i.test(detail)
+        ? " Deal records are purged 7 days after reveal, so an older deal id returns this rather than data."
+        : "";
+      return new ApiError(status, reason, `Not found: ${detail}.${purgeNote}`, false);
+    }
 
     default: {
       // Unknown reason codes will happen - the API ships new ones ahead of this

@@ -78,15 +78,27 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       description: DESCRIPTION_UPDATE_PROFILE,
       inputSchema: z.object({
         contact_name: z.string().min(1).describe("Operator name, released only after a deal seals"),
+        // Validate at the boundary rather than letting the API reject it. A
+        // model that gets "invalid email" back from a schema can fix it and
+        // retry; one that gets a 400 from a write it thought would succeed has
+        // to work out which of four fields was wrong.
         contact_email: z
           .string()
-          .min(3)
+          .email()
           .describe("Operator email, released only after a deal seals"),
+        // https only, not merely a URL. The API requires it, and `.url()` alone
+        // would happily accept an http:// route that then fails server-side.
         deal_route: z
           .string()
           .url()
+          .startsWith("https://", "must be an https URL")
           .describe("Your https route base for per-deal contact, released only after a deal seals"),
-        contact_url: z.string().url().optional().describe("Optional https contact URL"),
+        contact_url: z
+          .string()
+          .url()
+          .startsWith("https://", "must be an https URL")
+          .optional()
+          .describe("Optional https contact URL"),
       }),
       annotations: {
         readOnlyHint: false,
