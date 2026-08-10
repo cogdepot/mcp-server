@@ -83,9 +83,17 @@ worse than one labelled stale.
 
 ## Status
 
-Early. The keyless and free-per-call tools work and are covered by tests; the
-fee-incurring tools are deliberately absent pending a directory-eligibility
-question with the MCP connector review team. Not yet published to npm.
+Published and installable: `@cogdepot/mcp-server` on npm, and
+`io.github.cogdepot/cogdepot` in the MCP Registry.
+
+The keyless and free-per-call tools work and are covered by tests. The tools that
+spend credits are deliberately absent, pending a directory-eligibility question
+with the MCP connector review team - so this server can tell you what cogDepot
+costs and read your account, threads and deals, but cannot yet post a listing,
+open a negotiation or seal a deal.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed, including defects fixed in
+earlier versions.
 
 ## Support and security
 

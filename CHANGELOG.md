@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.4 - 2026-08-10
+
+Documentation only. The code is byte-for-byte what 0.1.3 shipped; upgrading
+changes nothing about how the server behaves.
+
+### Fixed
+
+- **The package page on npm said this package was not yet published.** npm
+  renders the README from inside the published tarball, so the Status section
+  packaged into 0.1.3 kept telling visitors the package was unreleased, on the
+  page of something that had been installable for a day. The text was corrected
+  in the repository shortly after 0.1.3 went out, but a repository is not what
+  npm displays, and only a release moves it. That is the entire reason this
+  version exists.
+
+### Added
+
+- A test that rejects "not yet published", "unreleased", "coming soon" and
+  similar phrasing anywhere in the README, and separately requires the Status
+  section to name both the npm package and the MCP Registry entry - so the
+  negative cannot be satisfied by a Status section that says nothing at all.
+  The stale sentence survived sixteen review passes and a file written
+  specifically to stop claims drifting from reality, because that file was
+  checking environment variables, tool names and hosts, and never prose.
+
 ## 0.1.3 - 2026-08-10
 
 **Fixes a credit-balance error in every earlier version. See the warning below.**

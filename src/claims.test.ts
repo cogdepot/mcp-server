@@ -98,6 +98,36 @@ describe("the privacy policy describes the real network behaviour", () => {
   });
 });
 
+describe("the README does not describe an unreleased package", () => {
+  // The Status section said "Not yet published to npm" for a day after three
+  // versions were on npm and the MCP Registry. Sixteen review passes walked past
+  // it, and this file - written specifically to catch claims drifting from
+  // reality - was checking env vars, tool names and hosts, and not prose.
+  //
+  // It matters more than a GitHub typo: README.md ships inside the tarball and
+  // npmjs.com renders the packaged copy, so the npm page for a published package
+  // was telling visitors it was not published.
+  const UNRELEASED_LANGUAGE = [
+    /not yet published/i,
+    /\bunreleased\b/i,
+    /\bcoming soon\b/i,
+    /\bnot published\b/i,
+    /\bpre-?release\b/i,
+  ];
+
+  it.each(UNRELEASED_LANGUAGE)("says nothing matching %s", (pattern) => {
+    expect(README).not.toMatch(pattern);
+  });
+
+  it("names the published package and the registry entry", () => {
+    // A weak positive to sit against the negatives above: the Status section has
+    // to point at something real, or "no forbidden phrases" is satisfiable by
+    // saying nothing at all.
+    expect(README).toContain("@cogdepot/mcp-server");
+    expect(README).toContain("io.github.cogdepot/cogdepot");
+  });
+});
+
 describe("the README lists the tools that exist", () => {
   it("documents every registered tool", async () => {
     for (const name of await registeredToolNames()) {
