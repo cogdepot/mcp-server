@@ -405,6 +405,97 @@ describe("keyed tools", () => {
     await close();
   });
 
+  it("prints a deal credential once, not twice", async () => {
+    // A real sealed deal returns the ~500-character PASETO credential at the top
+    // level AND inside reveal. Printing both doubles the token cost and the
+    // number of places a deal-scoped secret can be copied out of.
+    const CREDENTIAL = "v4.public.AAAA-a-very-long-paseto-token-BBBB";
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/deals/": {
+          status: 200,
+          body: {
+            id: "3b418937",
+            status: "active",
+            credential: CREDENTIAL,
+            credential_kid: "c1fb2107011d8b96",
+            amount_micro: 1_000_000,
+            reveal: {
+              counterparty_endpoint: "https://cogdepot.com/x",
+              credential: CREDENTIAL,
+              credential_kid: "c1fb2107011d8b96",
+            },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_DEAL, { deal_id: "3b418937" });
+
+    expect(text.split(CREDENTIAL).length - 1).toBe(1);
+    // The reveal package is the half that survives, since it is what the caller
+    // is told to store.
+    expect(text).toContain("counterparty_endpoint");
+    // Fields that are not duplicated must be untouched.
+    expect(text).toContain("3b418937");
+    expect(text).toContain("amount_micro");
+    await close();
+  });
+
+  it("leaves a top-level field alone when it differs from its reveal namesake", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/deals/": {
+          status: 200,
+          body: {
+            id: "d1",
+            credential: "outer-value",
+            reveal: { credential: "inner-value" },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_DEAL, { deal_id: "d1" });
+
+    expect(text).toContain("outer-value");
+    expect(text).toContain("inner-value");
+    await close();
+  });
+
+  it("explains that reputation counters are money-gated", async () => {
+    // Verified on staging: an account that sealed a paid deal still reported
+    // finalized_count 0, because both sides were welcome-credit funded. Without
+    // saying so, a model concludes the deal failed.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/account": {
+          status: 200,
+          body: {
+            balance_micro: 8_799_000,
+            held_micro: 0,
+            reputation: { seller: { rating_sum: 5, rating_count: 1, finalized_count: 0 } },
+          },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_ACCOUNT);
+
+    expect(text).toMatch(/paid real money/);
+    expect(text).toMatch(/does NOT mean the deal failed/);
+    await close();
+  });
+
   it("reads the discovery document only for the error that quotes a top-up route", async () => {
     // Fetching it on every failure put a network call on every error path.
     const fetchImpl = routeFetch({

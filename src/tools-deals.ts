@@ -29,6 +29,35 @@ import {
 import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
+/**
+ * Drops top-level fields that repeat a value already inside `reveal`.
+ *
+ * A real sealed deal returns the ~500-character PASETO credential twice: once at
+ * the top level and again inside the reveal package. Printing both puts the same
+ * deal-scoped secret in a model's context twice, doubling both the token cost
+ * and the number of places it can be copied out of.
+ *
+ * `reveal` is the half that survives, because it is the package a caller is told
+ * to store, and truncating it would defeat the instruction to keep it. Only
+ * exact value matches are removed, so a top-level field that genuinely differs
+ * from its reveal namesake is left alone.
+ */
+export function withoutRevealDuplicates(
+  deal: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!deal) return deal;
+  const reveal = deal["reveal"];
+  if (typeof reveal !== "object" || reveal === null || Array.isArray(reveal)) return deal;
+
+  const inner = reveal as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(deal)) {
+    if (key !== "reveal" && key in inner && inner[key] === value) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 export function registerDealTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
     TOOL_GET_THREAD,
@@ -78,7 +107,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
           `/v1/deals/${encodeURIComponent(deal_id)}`,
         );
         return toolText(
-          `${renderRecord("Sealed deal", deal)}\n\n` +
+          `${renderRecord("Sealed deal", withoutRevealDuplicates(deal))}\n\n` +
             "This reveal is available for 7 days after the deal sealed, then the record is purged " +
             "and only aggregate reputation survives. Store anything you need now.",
         );

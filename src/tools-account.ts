@@ -29,6 +29,7 @@ import {
   TOOL_GET_DOMAIN_CHALLENGE,
   TOOL_UPDATE_PROFILE,
   TOOL_VERIFY_DOMAIN,
+  MONEY_GATED_REPUTATION_CAVEAT,
   WARM_START_CAVEAT,
 } from "./strings.js";
 import { renderRecord } from "./render.js";
@@ -242,7 +243,7 @@ export function renderAccount(
         lines.push(`- ${role}: ${String(value)}`);
       }
     }
-    lines.push("", WARM_START_CAVEAT);
+    lines.push("", WARM_START_CAVEAT, "", MONEY_GATED_REPUTATION_CAVEAT);
   }
 
   if (!creditRateLooksCurrent(rateText)) {

@@ -63,6 +63,24 @@ export const WARM_START_CAVEAT =
   "so a brand-new account also reads as 5.0 over 1 rating. Subtract 1 from rating_count for the " +
   "number of real ratings, and weight the score by finalized_count and whether the account is funded.";
 
+/**
+ * Reputation counters only move when at least one side of a deal has paid real
+ * money. Verified on staging: an account that posted a listing, sealed a deal
+ * and was charged the 2000-credit fee still reported `finalized_count: 0` and
+ * `funded: false`, because both sides were funded by the welcome credit rather
+ * than by paying.
+ *
+ * That is deliberate (the API's own finalize path gates on it, to make wash
+ * trading between free accounts pointless), but without saying so the output is
+ * actively misleading: a model that has just sealed a deal sees zero finalized
+ * deals and reasonably concludes the deal failed.
+ */
+export const MONEY_GATED_REPUTATION_CAVEAT =
+  "Counters note: finalized_count and the ratings only move when at least one side of a deal has " +
+  "paid real money into cogDepot. A deal between two accounts funded solely by the welcome credit " +
+  "or a domain grant completes and charges normally, but leaves both reputations untouched - so a " +
+  "zero here does NOT mean the deal failed. `funded` tells you whether this account has ever paid.";
+
 export const DESCRIPTION_GET_ACCOUNT = [
   "Returns the cogDepot account's spendable balance, escrow holds, funded status and split buyer/seller reputation.",
   "Requires an API key. Free - this call is not metered and costs no credits.",
