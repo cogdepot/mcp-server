@@ -22,41 +22,48 @@ export function renderRecord(heading: string, body: Record<string, unknown> | un
   if (!body) return `${heading}: the API returned no content.`;
 
   const lines = [`# ${heading}`];
-  for (const [key, value] of Object.entries(body)) {
-    if (value === null || value === undefined) continue;
-
-    // A raw uUSD figure must never reach a model. `amount_micro: 1000000` reads
-    // as a million of something; it is $1.00, or 2,000 credits. This is the same
-    // class of confusion as the conversion bug that shipped in 0.1.2, and the
-    // account renderer already guarded against it while the thread and deal
-    // renderers did not - which is why it survived here.
-    if (key.endsWith("_micro") && typeof value === "number") {
-      const label = key.replace(/_micro$/, "");
-      lines.push(`- **${label}**: ${formatCredits(Math.floor(value / MICRO_USD_PER_CREDIT))}`);
-      continue;
-    }
-
-    // The API returns both `id` and `thread_id`, and `thread_id` is a truncated
-    // prefix that 404s on every path that takes an id. Relaying it unlabelled
-    // hands a model a broken identifier that looks like the right one. Filed
-    // against the API as T985(c); until it changes, say what it is.
-    if (key === "thread_id" && typeof value === "string") {
-      lines.push(
-        `- **${key}**: ${value} (short display form - NOT usable as an id; use \`id\` above)`,
-      );
-      continue;
-    }
-    if (typeof value === "object") {
-      lines.push(`- **${key}**:`);
-      lines.push(
-        JSON.stringify(value, null, 2)
-          .split("\n")
-          .map((line) => `    ${line}`)
-          .join("\n"),
-      );
-    } else {
-      lines.push(`- **${key}**: ${String(value)}`);
-    }
-  }
+  for (const [key, value] of Object.entries(body)) lines.push(...renderField(key, value));
   return lines.join("\n");
+}
+
+/**
+ * Renders one key/value pair as zero or more lines.
+ *
+ * Extracted from `renderRecord` so the listing renderer can reuse the µUSD and
+ * nesting rules for the fields it does not lay out itself. The alternative was a
+ * second field renderer that would have to remember the µUSD guard on its own,
+ * which is how the guard came to be missing from two of three renderers in the
+ * first place.
+ */
+export function renderField(key: string, value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+
+  // A raw uUSD figure must never reach a model. `amount_micro: 1000000` reads
+  // as a million of something; it is $1.00, or 2,000 credits. This is the same
+  // class of confusion as the conversion bug that shipped in 0.1.2, and the
+  // account renderer already guarded against it while the thread and deal
+  // renderers did not - which is why it survived here.
+  if (key.endsWith("_micro") && typeof value === "number") {
+    const label = key.replace(/_micro$/, "");
+    return [`- **${label}**: ${formatCredits(Math.floor(value / MICRO_USD_PER_CREDIT))}`];
+  }
+
+  // The API returns both `id` and `thread_id`, and `thread_id` is a truncated
+  // prefix that 404s on every path that takes an id. Relaying it unlabelled
+  // hands a model a broken identifier that looks like the right one. Filed
+  // against the API as T985(c); until it changes, say what it is.
+  if (key === "thread_id" && typeof value === "string") {
+    return [`- **${key}**: ${value} (short display form - NOT usable as an id; use \`id\` above)`];
+  }
+
+  if (typeof value === "object") {
+    return [
+      `- **${key}**:`,
+      JSON.stringify(value, null, 2)
+        .split("\n")
+        .map((line) => `    ${line}`)
+        .join("\n"),
+    ];
+  }
+  return [`- **${key}**: ${String(value)}`];
 }

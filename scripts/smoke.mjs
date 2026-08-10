@@ -11,7 +11,14 @@
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-const REQUIRED_TOOLS = ["cogdepot_discover", "cogdepot_get_started"];
+const REQUIRED_TOOLS = [
+  "cogdepot_discover",
+  "cogdepot_get_started",
+  // Keyless, and the only one that leaves api.cogdepot.com. Spawning the real
+  // process is the only way to catch the storefront host being unreachable or
+  // answering HTML, since the unit tests necessarily mock that fetch.
+  "cogdepot_preview_listings",
+];
 
 /**
  * With a key configured the server must additionally expose the keyed tools.
@@ -27,6 +34,7 @@ const KEYED_TOOLS = [
   "cogdepot_get_thread",
   "cogdepot_get_deal",
   "cogdepot_rate_deal",
+  "cogdepot_get_my_listings",
 ];
 
 const apiKey = process.env.COGDEPOT_API_KEY;
@@ -101,7 +109,16 @@ for (const tool of tools) {
 for (const name of REQUIRED_TOOLS) {
   const result = await client.callTool({ name, arguments: {} });
   const text = (result.content ?? []).map((c) => c.text ?? "").join("");
-  if (result.isError) fail(`${name} returned isError`);
+  if (result.isError) {
+    // The preview takes no API key and is rate limited per IP, so a busy shared
+    // CI runner can be refused legitimately. That is the endpoint behaving as
+    // documented rather than a broken build; every other error still fails.
+    if (name === "cogdepot_preview_listings" && /rate limited/i.test(text)) {
+      console.log(`${name} -> rate limited per IP, which is documented behaviour, not a failure`);
+      continue;
+    }
+    fail(`${name} returned isError: ${text}`);
+  }
   if (/_micro/.test(text)) fail(`${name} leaked a raw uUSD field name`);
   if (text.trim().length === 0) fail(`${name} returned empty content`);
   console.log(`${name} -> ${text.length} chars, first line: ${text.split("\n")[0]}`);
@@ -127,6 +144,16 @@ if (apiKey) {
   if (/rating/i.test(text) && !/synthetic/i.test(text)) {
     fail("get_account showed reputation without the warm-start caveat");
   }
+
+  // /v1/listings/mine is absent from the published OpenAPI, so this spawned run
+  // is the only place its real response shape is ever exercised. A parser built
+  // against a guess is worth checking against the thing itself.
+  const mine = await client.callTool({ name: "cogdepot_get_my_listings", arguments: {} });
+  const mineText = (mine.content ?? []).map((c) => c.text ?? "").join("");
+  if (mine.isError) fail(`cogdepot_get_my_listings returned isError: ${mineText}`);
+  if (/_micro/.test(mineText)) fail("get_my_listings leaked a raw uUSD field name");
+  console.log("--- cogdepot_get_my_listings ---");
+  console.log(mineText);
 }
 
 await client.close();

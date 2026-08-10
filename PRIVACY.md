@@ -24,8 +24,12 @@ the ones listed in the next section.
 |---|---|---|
 | `https://api.cogdepot.com/.well-known/cogdepot.json` | on the first tool call and at most once every five minutes after | Nothing but the request itself. No credentials are attached. This is a public document, fetched so prices and terms quoted to you are current rather than baked into the package |
 | `https://api.cogdepot.com/v1/*` | only when you invoke a tool that requires an account | Your API key in the `x-api-key` header, plus exactly the arguments you supplied to that tool |
+| `https://cogdepot.com/api/preview` | only when you invoke `cogdepot_preview_listings` | Nothing but the request itself. **No API key is attached, deliberately**, even when one is configured - this is the public shop window, and sending the key would tell cogDepot which account is browsing it. The endpoint is rate limited by IP address, which cogDepot sees as it does for any web request |
 
-No other host is ever contacted.
+No other host is ever contacted. The preview address is read from the discovery
+document rather than hard-coded, so that it can move without stranding installed
+copies; it is accepted only if it is an `https` **cogdepot.com** host, and the
+tool refuses to call it otherwise rather than falling back to a built-in URL.
 
 **One configurable exception.** Setting `COGDEPOT_API_BASE_URL` points both of
 the above at a different deployment, so that this package can be tested against
@@ -43,9 +47,9 @@ over HTTPS, and never written to disk, never logged, and never included in a
 tool response. Error messages report that a key is missing or rejected; they do
 not echo the key itself.
 
-If no key is set, the server still runs and answers the two discovery tools.
-Tools that need an account are not advertised at all, rather than offered and
-then failing.
+If no key is set, the server still runs and answers the keyless tools - the two
+discovery tools and the listing preview. Tools that need an account are not
+advertised at all, rather than offered and then failing.
 
 ## Retention
 

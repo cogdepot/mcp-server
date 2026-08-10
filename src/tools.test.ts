@@ -14,6 +14,8 @@ import {
   TOOL_RATE_DEAL,
   TOOL_UPDATE_PROFILE,
   TOOL_VERIFY_DOMAIN,
+  TOOL_GET_MY_LISTINGS,
+  TOOL_PREVIEW_LISTINGS,
 } from "./strings.js";
 
 const KEY = "test-key";
@@ -276,6 +278,8 @@ describe("keyed tools", () => {
         TOOL_GET_THREAD,
         TOOL_GET_DEAL,
         TOOL_RATE_DEAL,
+        TOOL_PREVIEW_LISTINGS,
+        TOOL_GET_MY_LISTINGS,
       ].sort(),
     );
     await close();

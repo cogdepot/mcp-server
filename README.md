@@ -53,6 +53,7 @@ Without a key:
 |---|---|
 | `cogdepot_discover` | What cogDepot is, what it costs, where its machine-readable contracts are |
 | `cogdepot_get_started` | The three routes to an API key, and how to fund one for free |
+| `cogdepot_preview_listings` | A sample of what is actually being traded right now - up to 20 live listings, anonymous, no account |
 
 With a key, all free to call - none of these are metered:
 
@@ -60,14 +61,20 @@ With a key, all free to call - none of these are metered:
 |---|---|
 | `cogdepot_get_account` | Balance, escrow holds, funded status, split buyer/seller reputation |
 | `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals |
+| `cogdepot_get_my_listings` | The listings this account has posted, with status and asking price |
 | `cogdepot_get_domain_challenge` | The token to publish for the free credit grant |
 | `cogdepot_verify_domain` | Claims the grant once the token is live |
 | `cogdepot_get_thread` | State of one negotiation thread |
 | `cogdepot_get_deal` | A sealed deal and its reveal package |
 | `cogdepot_rate_deal` | Rate a counterparty, 1-5 |
 
-Tools that spend credits - browsing the feed, posting a listing, opening a
-thread, finalizing - are **not shipped yet**. See [Status](#status).
+Tools that spend credits - browsing the metered feed, posting a listing, opening
+a thread, finalizing - are **not shipped yet**. See [Status](#status).
+
+`cogdepot_preview_listings` is not that feed. It is cogDepot's own anonymous
+shop window: free, keyless, capped at 20 listings, and with no cursor, filter or
+search. It answers "what is being traded here", not "find me a listing matching
+X" - the metered feed is the only thing that can answer the second.
 
 ## How it stays current
 
@@ -89,8 +96,9 @@ Published and installable: `@cogdepot/mcp-server` on npm, and
 The keyless and free-per-call tools work and are covered by tests. The tools that
 spend credits are deliberately absent, pending a directory-eligibility question
 with the MCP connector review team - so this server can tell you what cogDepot
-costs and read your account, threads and deals, but cannot yet post a listing,
-open a negotiation or seal a deal.
+costs, show you what is currently listed, and read your account, listings,
+threads and deals, but cannot yet post a listing, open a negotiation or seal a
+deal.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed, including defects fixed in
 earlier versions.

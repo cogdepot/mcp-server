@@ -15,6 +15,7 @@ import { CogDepotClient } from "./client.js";
 import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
 import { registerAccountTools } from "./tools-account.js";
 import { registerDealTools } from "./tools-deals.js";
+import { registerMyListingsTool, registerPreviewTool } from "./tools-listings.js";
 import {
   DESCRIPTION_DISCOVER,
   DESCRIPTION_GET_STARTED,
@@ -44,6 +45,10 @@ export function buildServer(apiKey?: string): McpServer {
   // has signed up. This is the zero-configuration demo path.
   registerDiscover(server);
   registerGetStarted(server);
+  // The anonymous preview belongs here rather than behind the key: it is the
+  // only keyless tool that shows what is actually being traded, which is the
+  // question a prospective user asks before deciding a key is worth obtaining.
+  registerPreviewTool(server);
 
   // Keyed but free per call. Registered only when a key is configured: the spec
   // allows the tool set to vary by the authorization presented, and advertising
@@ -52,12 +57,18 @@ export function buildServer(apiKey?: string): McpServer {
     const client = new CogDepotClient(apiKey);
     registerAccountTools(server, client);
     registerDealTools(server, client);
+    registerMyListingsTool(server, client);
   }
 
-  // Absent by design: browse, post, open thread, finalize. Every one spends
-  // credits, and whether a fee-incurring tool is admissible to the connector
-  // directory is an open question with the review team. Building them before
-  // the answer is how the work gets thrown away.
+  // Absent by design: browse the metered feed, post, open thread, finalize.
+  // Every one spends credits, and whether a fee-incurring tool is admissible to
+  // the connector directory is an open question with the review team. Building
+  // them before the answer is how the work gets thrown away.
+  //
+  // The two listing tools above are not exceptions to that: the preview is
+  // unauthenticated and free, and /v1/listings/mine is explicitly unmetered.
+  // Neither can reach a listing this account did not post, and neither can spend
+  // a credit.
 
   return server;
 }

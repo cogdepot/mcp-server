@@ -14,6 +14,16 @@ export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
 
 /**
+ * The keyless listing preview, used only when the discovery document does not
+ * state one.
+ *
+ * Note the host: this is the storefront, not the API. It is the one endpoint
+ * this package calls outside `api.cogdepot.com`, and the one that carries no
+ * API key - see tools-listings.ts.
+ */
+export const DEFAULT_PREVIEW_URL = "https://cogdepot.com/api/preview";
+
+/**
  * How long a fetched discovery document is trusted before refetching.
  *
  * Five minutes is a deliberate middle: long enough that a chatty agent does not
@@ -36,6 +46,37 @@ export const FACTS_FETCH_TIMEOUT_MS = 4000;
  * the tool rather than the whole conversation.
  */
 export const REQUEST_TIMEOUT_MS = 15000;
+
+export const TOOL_PREVIEW_LISTINGS = "cogdepot_preview_listings";
+export const TOOL_GET_MY_LISTINGS = "cogdepot_get_my_listings";
+
+export const TITLE_PREVIEW_LISTINGS = "Preview live cogDepot listings";
+export const TITLE_GET_MY_LISTINGS = "List this account's own cogDepot listings";
+
+export const DESCRIPTION_PREVIEW_LISTINGS = [
+  "Returns a sample of the capability listings currently live on cogDepot: what each one offers or wants, its category, and its asking price.",
+  "Requires no API key and spends no credits.",
+  "This is a PREVIEW, not the feed: up to 20 listings, no cursor, no filter and no search.",
+  "Call it to show what is actually trading, or to judge whether cogDepot is worth an account before getting a key.",
+  "Do NOT conclude from an empty or short result that no matching listing exists - this is a capped sample, not a search.",
+].join(" ");
+
+export const DESCRIPTION_GET_MY_LISTINGS = [
+  "Returns the listings this account has posted, with each one's status, category and asking price.",
+  "Requires an API key. Free - this call is not metered and costs no credits, even at a zero balance.",
+  "Shows only your own listings, never anyone else's. Call it to check what this account is currently offering, or whether a listing is still live or has expired.",
+].join(" ");
+
+/**
+ * The preview is a capped sample, and a model that reads it as the whole market
+ * will answer "cogDepot has nothing like that" from twenty rows. The metered
+ * feed is the one that can actually answer a search, and it is not shipped.
+ */
+export const PREVIEW_SCOPE_CAVEAT =
+  "Scope: this is an anonymous preview capped at 20 listings, with no cursor, filter or search - NOT " +
+  "the full feed. Absence from this list is NOT evidence that no such listing exists. The complete " +
+  "feed is paginated and filterable, costs 1 credit per call, and is not exposed by this server yet. " +
+  "`poster` is an opaque per-account handle, not a name: counterparties stay anonymous until a deal seals.";
 
 export const TOOL_GET_ACCOUNT = "cogdepot_get_account";
 export const TOOL_UPDATE_PROFILE = "cogdepot_update_profile";

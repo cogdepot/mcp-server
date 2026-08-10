@@ -4,7 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 
 import { buildServer } from "./core.js";
 import { resetFactsCacheForTesting } from "./facts.js";
-import { TOOL_DISCOVER, TOOL_GET_STARTED } from "./strings.js";
+import { TOOL_DISCOVER, TOOL_GET_STARTED, TOOL_PREVIEW_LISTINGS } from "./strings.js";
 
 /**
  * Connects a real client to a real server over an in-memory pair. This is the
@@ -42,7 +42,9 @@ describe("tool surface", () => {
     const { client, close } = await connect();
     const { tools } = await client.listTools();
 
-    expect(tools.map((t) => t.name).sort()).toEqual([TOOL_DISCOVER, TOOL_GET_STARTED]);
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      [TOOL_DISCOVER, TOOL_GET_STARTED, TOOL_PREVIEW_LISTINGS].sort(),
+    );
     await close();
   });
 
