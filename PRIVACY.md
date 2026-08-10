@@ -42,8 +42,14 @@ then failing.
 ## Retention
 
 This package retains nothing between runs. It writes no files, no cache and no
-state directory. The only in-memory retention is the public discovery document,
-for at most five minutes, and it is discarded when the process exits.
+state directory, and everything it holds is discarded when the process exits.
+
+The only thing held in memory is the public discovery document, normally for
+five minutes. One exception, stated precisely because "at most five minutes"
+would not be true: if a refresh fails, the previously fetched copy is kept and
+served past that window rather than falling back to the older copy bundled with
+the package, and responses built from it say so. It is public pricing data
+containing nothing about you, and it is still gone when the process exits.
 
 Data you send to cogDepot through it is retained under the cogDepot platform
 policy at <https://cogdepot.com/privacy>. Note in particular that deal records

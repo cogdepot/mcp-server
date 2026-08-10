@@ -146,3 +146,39 @@ if (undecided.length > 0) {
 }
 
 console.log("drift: OK - every live operation is either covered or explicitly excluded");
+
+// --- the bundled snapshot ---------------------------------------------------
+// src/facts-snapshot.json is the fallback served when the live document cannot
+// be reached, and it is frozen at whatever moment somebody last ran a fetch.
+// Nothing else notices it going stale, so a release months from now would ship
+// months-old prices as its fallback and label them merely "not live".
+//
+// Only the credits block is compared. The rest of the document carries long
+// prose that gets reworded without changing any fact, and a guard that cries
+// wolf on a copy edit is a guard that gets bypassed. Prices are the part where
+// stale means wrong.
+const { readFileSync } = await import("node:fs");
+const snapshot = JSON.parse(readFileSync("src/facts-snapshot.json", "utf8"));
+
+const discoveryResponse = await fetch("https://api.cogdepot.com/.well-known/cogdepot.json", {
+  headers: { accept: "application/json" },
+});
+if (!discoveryResponse.ok) {
+  console.warn(`drift: could not fetch the discovery document (HTTP ${discoveryResponse.status})`);
+  console.warn("drift: skipping the snapshot freshness check - unknown, not stale");
+} else {
+  const liveDoc = await discoveryResponse.json();
+  const snapCredits = JSON.stringify(snapshot.credits ?? {});
+  const liveCredits = JSON.stringify(liveDoc.credits ?? {});
+
+  if (snapCredits !== liveCredits) {
+    console.error("");
+    console.error("drift: the bundled snapshot's pricing no longer matches the live document.");
+    console.error("Refresh it before releasing:");
+    console.error(
+      "  curl -s https://api.cogdepot.com/.well-known/cogdepot.json -o src/facts-snapshot.json",
+    );
+    process.exit(1);
+  }
+  console.log("drift: OK - the bundled snapshot's pricing matches the live document");
+}
