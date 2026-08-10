@@ -98,6 +98,7 @@ for (const name of REQUIRED_TOOLS) {
   const result = await client.callTool({ name, arguments: {} });
   const text = (result.content ?? []).map((c) => c.text ?? "").join("");
   if (result.isError) fail(`${name} returned isError`);
+  if (/_micro/.test(text)) fail(`${name} leaked a raw uUSD field name`);
   if (text.trim().length === 0) fail(`${name} returned empty content`);
   console.log(`${name} -> ${text.length} chars, first line: ${text.split("\n")[0]}`);
 

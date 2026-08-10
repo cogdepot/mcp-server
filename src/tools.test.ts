@@ -405,6 +405,54 @@ describe("keyed tools", () => {
     await close();
   });
 
+  it("never shows a raw uUSD figure on a thread or a deal", async () => {
+    // The account renderer guarded this from the start; the thread and deal
+    // renderers did not, which is how `amount_micro: 1000000` reached a model.
+    // 1,000,000 uUSD is $1.00 and 2,000 credits - a model reading the raw
+    // number as a quantity is the same confusion that produced the 0.1.2 bug.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/threads/": { status: 200, body: { id: "t1", status: "open", amount_micro: 1_000_000 } },
+        "/v1/deals/": { status: 200, body: { id: "d1", amount_micro: 1_000_000 } },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+
+    const thread = await callText(client, TOOL_GET_THREAD, { thread_id: "t1" });
+    expect(thread.text).not.toMatch(/_micro/);
+    expect(thread.text).toContain("2,000 credits ($1.00)");
+
+    const deal = await callText(client, TOOL_GET_DEAL, { deal_id: "d1" });
+    expect(deal.text).not.toMatch(/_micro/);
+    expect(deal.text).toContain("2,000 credits ($1.00)");
+    await close();
+  });
+
+  it("labels the truncated thread_id so it is not mistaken for an id", async () => {
+    // The API returns a 13-character prefix under a name that looks like the
+    // path parameter. Relaying it unlabelled hands a model a broken identifier.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/threads/": {
+          status: 200,
+          body: { id: "aeb24c7c-2f28-4d12-b378-a4bad822f3da", thread_id: "aeb24c7c-2f2" },
+        },
+      }),
+    );
+
+    const { client, close } = await connectWithKey();
+    const { text } = await callText(client, TOOL_GET_THREAD, { thread_id: "x" });
+
+    expect(text).toMatch(/NOT usable as an id/);
+    expect(text).toContain("aeb24c7c-2f28-4d12-b378-a4bad822f3da");
+    await close();
+  });
+
   it("prints a deal credential once, not twice", async () => {
     // A real sealed deal returns the ~500-character PASETO credential at the top
     // level AND inside reveal. Printing both doubles the token cost and the
@@ -439,9 +487,10 @@ describe("keyed tools", () => {
     // The reveal package is the half that survives, since it is what the caller
     // is told to store.
     expect(text).toContain("counterparty_endpoint");
-    // Fields that are not duplicated must be untouched.
+    // Fields that are not duplicated must survive - and the amount is now
+    // rendered in credits rather than as a raw uUSD figure.
     expect(text).toContain("3b418937");
-    expect(text).toContain("amount_micro");
+    expect(text).toContain("2,000 credits ($1.00)");
     await close();
   });
 
