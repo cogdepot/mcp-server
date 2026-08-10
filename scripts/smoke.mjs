@@ -78,12 +78,16 @@ if (apiKey) {
 }
 
 // No tool that spends credits may ship until the directory-eligibility question
-// is answered. This guard is the mechanism that keeps that decision honest.
-const GATED = ["search_listings", "get_listing", "post_listing", "open_thread", "finalize_deal"];
-for (const gated of GATED) {
-  if (names.some((n) => n.endsWith(gated))) {
-    fail(`cogdepot_${gated} is registered but fee-incurring tools are still gated`);
-  }
+// is answered, and this is the guard that keeps that decision honest.
+//
+// It asserts the EXACT set, not the absence of five names it happens to know.
+// The earlier denylist would have passed a newly added `cogdepot_browse`, which
+// is exactly the tool it was supposed to stop. Pinning the set means any new
+// tool fails here until somebody adds it deliberately - at which point they have
+// to decide whether it costs the user money.
+const EXPECTED = [...REQUIRED_TOOLS, ...(apiKey ? KEYED_TOOLS : [])].sort();
+if (JSON.stringify(names) !== JSON.stringify(EXPECTED)) {
+  fail(`unexpected tool set.\n  got:      ${names.join(", ")}\n  expected: ${EXPECTED.join(", ")}`);
 }
 
 for (const tool of tools) {

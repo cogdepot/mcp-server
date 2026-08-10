@@ -5,6 +5,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { buildServer } from "./core.js";
 import { resetFactsCacheForTesting } from "./facts.js";
 import {
+  TOOL_DISCOVER,
+  TOOL_GET_STARTED,
   TOOL_GET_ACCOUNT,
   TOOL_GET_DEAL,
   TOOL_GET_DOMAIN_CHALLENGE,
@@ -246,16 +248,36 @@ describe("keyed tools", () => {
     await close();
   });
 
-  it("ships no fee-incurring tool while the eligibility question is open", async () => {
+  it("registers exactly the expected tools and nothing else", async () => {
+    // An EXACT set, not a denylist of forbidden names.
+    //
+    // This previously listed the five fee-incurring tools and asserted their
+    // absence, which enforced something weaker than the claim it backs: adding
+    // `cogdepot_browse` or `cogdepot_create_listing` would have passed, and the
+    // whole point is that no tool which spends credits ships until the
+    // directory-eligibility question is answered.
+    //
+    // Pinning the exact set means ANY new tool fails here until somebody adds
+    // it deliberately - and that moment is precisely when they have to decide
+    // whether it costs the user money.
     vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }));
 
     const { client, close } = await connectWithKey();
     const { tools } = await client.listTools();
-    const names = tools.map((t) => t.name);
 
-    for (const gated of ["search_listings", "get_listing", "post_listing", "open_thread", "finalize_deal"]) {
-      expect(names.some((n) => n.endsWith(gated))).toBe(false);
-    }
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      [
+        TOOL_DISCOVER,
+        TOOL_GET_STARTED,
+        TOOL_GET_ACCOUNT,
+        TOOL_UPDATE_PROFILE,
+        TOOL_GET_DOMAIN_CHALLENGE,
+        TOOL_VERIFY_DOMAIN,
+        TOOL_GET_THREAD,
+        TOOL_GET_DEAL,
+        TOOL_RATE_DEAL,
+      ].sort(),
+    );
     await close();
   });
 
