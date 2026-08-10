@@ -85,6 +85,53 @@ describe("describeProblem", () => {
     expect(error.message).not.toContain("{");
   });
 
+  it("keeps the API's own reassurance on a 428, verbatim", () => {
+    // Captured from staging on 2026-08-10. "No fee was taken" is the sentence a
+    // model needs most after a failed fee-bearing action, and a message rebuilt
+    // from `missing` and `next` alone cannot know it.
+    const error = describeProblem(
+      428,
+      asProblem({
+        reason: "profile_incomplete_self",
+        detail:
+          "Your account cannot enter a deal until its contact details and deal route are set. No fee was taken.",
+        missing: ["contact_name", "contact_email", "deal_route"],
+        next: [
+          { action: "set_contact", method: "PUT", path: "/v1/account/contact" },
+          { action: "set_route", method: "PUT", path: "/v1/account/route" },
+        ],
+      }),
+    );
+
+    expect(error.message).toContain("No fee was taken");
+    expect(error.message).toContain("Missing: contact_name, contact_email, deal_route");
+    expect(error.message).toContain("1. set_contact: PUT /v1/account/contact");
+  });
+
+  it("quotes the exact retry delay the API gives, rather than guessing", () => {
+    // Also captured from staging. The API states 3600; reconstructing "wait for
+    // the hour to roll over" throws away a number it handed us.
+    const error = describeProblem(
+      429,
+      asProblem({
+        reason: "rate_limited",
+        detail: "Too many registrations from this source. This is not a penalty and clears on its own.",
+        retryAfterSeconds: 3600,
+      }),
+    );
+
+    expect(error.message).toContain("3600 seconds");
+    expect(error.message).toContain("60 minutes");
+    expect(error.message).toContain("not a penalty");
+    expect(error.retryable).toBe(true);
+  });
+
+  it("still explains rate_limited when no delay is given", () => {
+    const error = describeProblem(429, asProblem({ reason: "rate_limited" }));
+    expect(error.message).toContain("clears when the hour rolls over");
+    expect(error.retryable).toBe(true);
+  });
+
   it("treats rate_limited as retryable", () => {
     const error = describeProblem(429, asProblem({ reason: "rate_limited" }));
     expect(error.retryable).toBe(true);

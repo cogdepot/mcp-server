@@ -24,6 +24,7 @@ export interface ProblemDocument {
   readonly reason?: string;
   readonly creditsRemaining?: number;
   readonly creditsRequired?: number;
+  readonly retryAfterSeconds?: number;
   readonly missing?: readonly string[];
   readonly next?: readonly { action?: string; method?: string; path?: string }[];
   readonly [key: string]: unknown;
@@ -87,6 +88,10 @@ export function describeProblem(
     }
 
     case "profile_incomplete_self": {
+      // The API's own detail carries something the reconstructed message cannot
+      // know and a model badly needs: "No fee was taken." A 428 on a fee-bearing
+      // action leaves a model guessing whether it was charged, and a defensive
+      // guess is the expensive one. Keep the API's sentence, then add the steps.
       // The API already names the exact calls to make. Render them as steps
       // rather than as JSON, which is the difference between a model fixing
       // this by itself and a model apologising to the user.
@@ -98,24 +103,34 @@ export function describeProblem(
         })
         .join("\n");
       const missing = (problem.missing ?? []).join(", ");
+      const detail = text(problem.detail);
       return new ApiError(
         status,
         reason,
-        `This account is not set up yet${missing ? ` - missing ${missing}` : ""}.` +
+        (detail ?? `This account is not set up yet${missing ? ` - missing ${missing}` : ""}.`) +
+          (detail && missing ? ` Missing: ${missing}.` : "") +
           (steps ? `\nComplete it with:\n${steps}` : "") +
           `\ncogdepot_update_profile does this in one call.`,
         false,
       );
     }
 
-    case "rate_limited":
+    case "rate_limited": {
+      // The API states the wait exactly. Reconstructing "wait for the hour to
+      // roll over" from the reason code throws that away and leaves a model
+      // guessing at a number it was handed.
+      const retryAfter = numeric(problem.retryAfterSeconds);
+      const wait = retryAfter
+        ? ` Retry after ${retryAfter} seconds (about ${Math.round(retryAfter / 60)} minutes).`
+        : " It clears when the hour rolls over.";
       return new ApiError(
         status,
         reason,
-        "Rate limited on a free route. This is not a penalty and it clears when the hour rolls over. " +
-          "Wait rather than retrying immediately.",
+        `${text(problem.detail) ?? "Rate limited on a free route. This is not a penalty."}${wait}` +
+          " Wait rather than retrying immediately.",
         true,
       );
+    }
 
     case "too_many_violations":
       // Deliberately NOT retryable. This is an abuse counter, and advising a
