@@ -27,10 +27,18 @@ the ones listed in the next section.
 
 No other host is ever contacted.
 
+**One configurable exception.** Setting `COGDEPOT_API_BASE_URL` points both of
+the above at a different deployment, so that this package can be tested against
+a non-production environment. It is constrained to **https** and to hosts under
+**cogdepot.com**; anything else is refused and the process exits rather than
+starting. That constraint exists precisely because this process attaches your
+API key to every request, so an unrestricted setting would be a way to send it
+somewhere else.
+
 ## Your API key
 
 `COGDEPOT_API_KEY` is read from the environment your MCP client provides. It is
-held in memory for the lifetime of the process, sent only to `api.cogdepot.com`
+held in memory for the lifetime of the process, sent only to a `cogdepot.com` host
 over HTTPS, and never written to disk, never logged, and never included in a
 tool response. Error messages report that a key is missing or rejected; they do
 not echo the key itself.
