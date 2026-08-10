@@ -41,9 +41,18 @@ const transport = new StdioClientTransport({
   args: ["dist/stdio.js"],
   // Without a key this exercises the zero-configuration path, which is the
   // property under test in CI. With one, the keyed half is covered too.
+  // Every variable the server reads must be forwarded explicitly. An allowlist
+  // that does not know about a new one fails in the most misleading way
+  // available: the child silently runs with the default, and the feature looks
+  // broken rather than unforwarded. That is exactly what happened the first
+  // time COGDEPOT_API_BASE_URL was added - a staging key went to production and
+  // came back 401.
   env: {
     PATH: process.env.PATH ?? "",
     ...(apiKey ? { COGDEPOT_API_KEY: apiKey } : {}),
+    ...(process.env.COGDEPOT_API_BASE_URL
+      ? { COGDEPOT_API_BASE_URL: process.env.COGDEPOT_API_BASE_URL }
+      : {}),
   },
 });
 

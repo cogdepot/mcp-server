@@ -10,9 +10,8 @@
 export const SERVER_NAME = "cogdepot";
 export const SERVER_VERSION = "0.1.0";
 
-export const API_BASE_URL = "https://api.cogdepot.com";
+export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
-export const DISCOVERY_URL = `${API_BASE_URL}/.well-known/cogdepot.json`;
 
 /**
  * How long a fetched discovery document is trusted before refetching.

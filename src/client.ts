@@ -9,7 +9,8 @@
 
 import { ApiError, asProblem, describeProblem } from "./errors.js";
 import { getFacts } from "./facts.js";
-import { API_BASE_URL, REQUEST_TIMEOUT_MS } from "./strings.js";
+import { getApiBaseUrl } from "./config.js";
+import { REQUEST_TIMEOUT_MS } from "./strings.js";
 
 export interface RequestOptions {
   readonly method?: "GET" | "POST" | "PUT";
@@ -33,7 +34,7 @@ export class CogDepotClient {
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
 
-  constructor(apiKey?: string, baseUrl: string = API_BASE_URL, fetchImpl: typeof fetch = fetch) {
+  constructor(apiKey?: string, baseUrl: string = getApiBaseUrl(), fetchImpl: typeof fetch = fetch) {
     this.#apiKey = apiKey?.trim() || undefined;
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
     this.#fetch = fetchImpl;
