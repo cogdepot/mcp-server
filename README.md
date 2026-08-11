@@ -158,6 +158,34 @@ spawned process catches a broken bin entry, a bad import path in the emitted
 JavaScript, or a stray write to stdout corrupting the protocol stream.
 
 Set `COGDEPOT_API_KEY` before `npm run smoke` to exercise the keyed tools too.
+It will not call anything that spends: it names the tools it may invoke and
+fails closed on the rest, because a `finalize` in CI would charge both sides and
+reveal two parties to each other on every push.
+
+### The end-to-end run
+
+`npm run e2e` is the only thing that exercises the tools which move credits. It
+posts a listing, browses for it, opens a negotiation, counters, seals the deal,
+reads the reveal from both sides and rates it - printing every response, because
+its purpose is to put real payloads in front of a human rather than to assert
+against a shape that was guessed from the OpenAPI document.
+
+It costs about **$2.10** per run and is deliberately awkward to start:
+
+| Variable | Purpose |
+|---|---|
+| `COGDEPOT_E2E_POSTER_KEY` | Funded account that posts and receives the negotiation |
+| `COGDEPOT_E2E_NEGOTIATOR_KEY` | A **different** funded account that opens the thread and seals |
+| `COGDEPOT_API_BASE_URL` | Required, and refused if it names production |
+| `COGDEPOT_E2E_CONFIRM=spend` | Explicit acknowledgement, printed cost first |
+
+Both accounts need a complete profile or opening a thread fails; the script
+checks that before spending anything. If a run dies between opening a thread and
+sealing it, the thread is closed on the way out so the 2,000-credit hold is
+released rather than left to expire.
+
+It is not part of `verify` and must never be - a test enforces that, along with
+the refusal to run against production.
 
 ## Branches
 

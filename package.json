@@ -41,6 +41,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "e2e": "npm run build && node scripts/e2e.mjs",
     "drift": "node scripts/drift.mjs",
     "verify": "npm run typecheck && npm run coverage && npm run smoke",
     "prepublishOnly": "npm run verify"
