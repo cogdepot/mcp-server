@@ -157,10 +157,16 @@ COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
 
 Send the key as `Authorization: Bearer <key>` (the form a static-header connector
 uses) or an `x-cogdepot-api-key` header. This is **Phase 1**: a static-header
-connector, one shared credential, not per-user OAuth. Per-user OAuth against
-Cognito - a protected-resource-metadata route, bearer verification, and a `401`
-challenge for keyed tools - is the next phase and is not wired yet. The
-`apiKeyFromRequest` function is the seam where it lands.
+connector, one shared credential, not per-user OAuth.
+
+**Phase 2 groundwork** is present but not yet wired: `src/oauth.ts` holds a
+Cognito access-token verifier (RS256 via the pool's JWKS, checking `iss`,
+`client_id` and `token_use` - Cognito access tokens carry no `aud`) and the
+RFC 9728 protected-resource-metadata document, both covered by offline tests.
+They are deliberately not on the live request path, because verifying a user's
+token only becomes useful once the cogDepot API accepts that token (Phase 3,
+API-side) - until then a verified token has no key to call the API with. The
+`apiKeyFromRequest` seam in `remote.ts` is where the two phases meet.
 
 `scripts/serve-remote.mjs` is a local runner, not the deployment; a hosted
 deployment adapts the same `fetch` handler to its target (a Lambda event, for
