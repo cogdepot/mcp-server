@@ -57,6 +57,28 @@ export function formatCredits(credits: number): string {
 }
 
 /**
+ * Converts a dollar amount to the µUSD integer the API takes.
+ *
+ * The output rule has an input twin. `POST /v1/listings` wants `price_micro`,
+ * and a tool that asked a model for that field directly would invite exactly the
+ * error this module exists to prevent - a model that types 1000000 meaning "a
+ * million" prices a listing at $1.00, and one that types 50 meaning "$50" prices
+ * it at $0.00005. Tools take dollars, and this is the only place the conversion
+ * happens.
+ *
+ * Rounded, not truncated: $0.0000004 is a typo, not a price, and floor() would
+ * silently make it free.
+ */
+export function toMicroUsd(dollars: number): number {
+  return Math.round(dollars * 1_000_000);
+}
+
+/** Renders a µUSD figure as dollars. Exported for tools echoing back a price. */
+export function microToUsd(microUsd: number): string {
+  return toUsd(microUsd);
+}
+
+/**
  * Checks the live pricing text still implies the rate this module assumes.
  *
  * If cogDepot ever repriced a credit, silently converting at the old rate would

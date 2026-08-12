@@ -22,6 +22,22 @@ import { DEFAULT_API_BASE_URL } from "./strings.js";
 /** The only domain this package will send an API key to. */
 export const ALLOWED_API_DOMAIN = "cogdepot.com";
 
+/**
+ * True when a hostname is cogdepot.com or a subdomain of it.
+ *
+ * Suffix match on a dot boundary. A bare `endsWith("cogdepot.com")` would also
+ * accept `evilcogdepot.com`, which is the whole trick this guards.
+ *
+ * Shared rather than inlined because the keyless preview tool needs the same
+ * answer: it follows a URL out of the discovery document, and a second copy of a
+ * security predicate is one too many - the copy that drifts is the one that
+ * stops guarding.
+ */
+export function isAllowedCogDepotHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === ALLOWED_API_DOMAIN || host.endsWith(`.${ALLOWED_API_DOMAIN}`);
+}
+
 export class InvalidApiBaseUrlError extends Error {
   override readonly name = "InvalidApiBaseUrlError";
 }

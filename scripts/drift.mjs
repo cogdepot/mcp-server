@@ -29,21 +29,27 @@ const COVERED = {
   "GET /v1/threads/{id}": "cogdepot_get_thread",
   "GET /v1/deals/{id}": "cogdepot_get_deal",
   "POST /v1/deals/{id}/ratings": "cogdepot_rate_deal",
+
+  "GET /v1/feed": "cogdepot_browse_feed",
+  "GET /v1/listings/{id}": "cogdepot_get_listing",
+  "POST /v1/listings": "cogdepot_post_listing",
+  "GET /v1/listings/{id}/threads": "cogdepot_list_listing_threads",
+  "POST /v1/listings/{id}/threads": "cogdepot_open_thread",
+  "POST /v1/threads/{id}/offers": "cogdepot_submit_offer",
+  "POST /v1/threads/{id}/close": "cogdepot_close_thread",
+  "POST /v1/threads/{id}/finalize": "cogdepot_finalize_deal",
+  // Note: GET /v1/listings/mine is NOT listed here, though cogdepot_get_my_listings
+  // covers it. Like POST /v1/account/web below, it is a real route the published
+  // OpenAPI omits - unauthenticated it answers 401, exactly as /v1/account does,
+  // where a path that does not exist answers 404. Listing it would trip the stale
+  // check on every run, so the tool is real and this guard cannot see it. If the
+  // API ever publishes the route, move it up here.
 };
 
 /** Paths deliberately not exposed, each with the decision behind it. */
 const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
-
-  "GET /v1/feed": "GATED: 1 credit per call, pending the connector-directory eligibility answer.",
-  "GET /v1/listings/{id}": "GATED: 1 credit per call, same question.",
-  "POST /v1/listings": "GATED: 200 credits plus the metered call.",
-  "POST /v1/listings/{id}/threads": "GATED: places a 2000-credit hold.",
-  "POST /v1/threads/{id}/finalize": "GATED: charges 2000 credits per side, irreversible.",
-  "POST /v1/threads/{id}/offers": "GATED with the negotiation set; ships with open_thread.",
-  "POST /v1/threads/{id}/close": "GATED with the negotiation set.",
-  "GET /v1/listings/{id}/threads": "GATED with the negotiation set.",
 
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
@@ -168,6 +174,31 @@ if (!discoveryResponse.ok) {
   console.warn("drift: skipping the snapshot freshness check - unknown, not stale");
 } else {
   const liveDoc = await discoveryResponse.json();
+
+  // The keyless preview lives on the STOREFRONT (cogdepot.com), not the API, so
+  // it is absent from the OpenAPI document checked above and nothing up there
+  // can notice it moving or disappearing. cogdepot_preview_listings resolves it
+  // from this field at call time, so the field going missing silently demotes
+  // the tool to a hard-coded URL, and the field going off-domain makes the tool
+  // refuse outright. Both are worth failing a build over.
+  const previewUrl = liveDoc.keylessPreview?.url;
+  if (typeof previewUrl !== "string" || previewUrl.length === 0) {
+    console.error("");
+    console.error("drift: the discovery document no longer states keylessPreview.url.");
+    console.error("cogdepot_preview_listings would fall back to its built-in URL. Confirm the");
+    console.error("endpoint still exists, then update DEFAULT_PREVIEW_URL in src/strings.js.");
+    process.exit(1);
+  }
+  const previewHost = new URL(previewUrl).hostname.toLowerCase();
+  if (previewHost !== "cogdepot.com" && !previewHost.endsWith(".cogdepot.com")) {
+    console.error("");
+    console.error(`drift: keylessPreview.url points off-domain (${previewHost}).`);
+    console.error("cogdepot_preview_listings refuses to call it, so the tool is dead until this");
+    console.error("is explained. Treat a surprise here as a possible tampered document.");
+    process.exit(1);
+  }
+  console.log(`drift: OK - the keyless preview is still advertised at ${previewUrl}`);
+
   const snapCredits = JSON.stringify(snapshot.credits ?? {});
   const liveCredits = JSON.stringify(liveDoc.credits ?? {});
 

@@ -1,6 +1,5 @@
 /**
- * Account tools. All free per call - none of these are metered, so none are
- * affected by the pending directory-eligibility question.
+ * Account tools. All free per call - none of these are metered.
  *
  * Deliberately absent: a `register_account` tool. Registration requires sending
  * `accepted_terms: true`, and a tool that accepts a legal agreement on a user's
@@ -54,8 +53,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
         // NOT read-only, and this is not pedantry: the API's own field
         // description says "expired holds settled lazily on read". The hints
         // drive auto-permissions, so claiming read-only would let a
-        // state-changing call run unprompted, and annotation accuracy is
-        // checked in directory review.
+        // state-changing call run unprompted.
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,

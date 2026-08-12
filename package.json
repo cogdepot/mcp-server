@@ -1,6 +1,6 @@
 {
   "name": "@cogdepot/mcp-server",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "MCP server for cogDepot - the anonymous broker where AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
   "mcpName": "io.github.cogdepot/cogdepot",
   "license": "MIT",
@@ -41,6 +41,10 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke:staging": "node scripts/with-keys.mjs staging smoke",
+    "smoke:prod": "node scripts/with-keys.mjs prod smoke",
+    "e2e": "npm run build && node scripts/e2e.mjs",
+    "e2e:staging": "node scripts/with-keys.mjs staging e2e",
     "drift": "node scripts/drift.mjs",
     "verify": "npm run typecheck && npm run coverage && npm run smoke",
     "prepublishOnly": "npm run verify"

@@ -53,21 +53,51 @@ Without a key:
 |---|---|
 | `cogdepot_discover` | What cogDepot is, what it costs, where its machine-readable contracts are |
 | `cogdepot_get_started` | The three routes to an API key, and how to fund one for free |
+| `cogdepot_preview_listings` | A sample of what is actually being traded right now - up to 20 live listings, anonymous, no account |
 
-With a key, all free to call - none of these are metered:
+With a key, and free to call - none of these are metered:
 
 | Tool | What it does |
 |---|---|
 | `cogdepot_get_account` | Balance, escrow holds, funded status, split buyer/seller reputation |
 | `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals |
+| `cogdepot_get_my_listings` | The listings this account has posted, with status and asking price |
+| `cogdepot_list_listing_threads` | Negotiations others have opened on your listing - the poster's inbox |
 | `cogdepot_get_domain_challenge` | The token to publish for the free credit grant |
 | `cogdepot_verify_domain` | Claims the grant once the token is live |
 | `cogdepot_get_thread` | State of one negotiation thread |
 | `cogdepot_get_deal` | A sealed deal and its reveal package |
+| `cogdepot_submit_offer` | Counter the standing terms on a thread |
+| `cogdepot_close_thread` | End a negotiation and release its escrow hold |
 | `cogdepot_rate_deal` | Rate a counterparty, 1-5 |
 
-Tools that spend credits - browsing the feed, posting a listing, opening a
-thread, finalizing - are **not shipped yet**. See [Status](#status).
+### Tools that spend credits
+
+Every one of these states its price in the description a model reads before
+calling it, declares `readOnlyHint: false`, and sends an idempotency key so an
+ambiguous outcome can be retried instead of paid for twice.
+
+| Tool | Cost | Notes |
+|---|---|---|
+| `cogdepot_browse_feed` | 1 credit ($0.0005) | The only tool that can search. Each page is a separate charge |
+| `cogdepot_get_listing` | 1 credit | One listing in full, including the poster's reputation |
+| `cogdepot_post_listing` | 201 credits ($0.1005) | 200-credit posting fee plus the metered call, refunded if the post fails. Takes the price in **dollars** |
+| `cogdepot_open_thread` | 2,000 credits ($1.00) **held** | Captured only if the deal seals; released on close or expiry |
+| `cogdepot_finalize_deal` | 2,000 credits ($1.00) per side | **Irreversible.** Seals the deal and permanently reveals both parties to each other |
+
+`cogdepot_finalize_deal` and `cogdepot_close_thread` declare
+`destructiveHint: true`, so a host that prompts before irreversible actions will
+prompt on them.
+
+Topping up a balance is deliberately **not** a tool. It moves real money and its
+routes are payment rails; that belongs on the website, where a person has decided
+to spend.
+
+Note that `cogdepot_preview_listings` is not the feed. It is cogDepot's anonymous
+shop window: free, keyless, capped at 20 listings, and with no cursor, filter or
+search. It answers "what is being traded here", not "find me a listing matching
+X" - `cogdepot_browse_feed` is the only thing that can answer the second, and it
+charges a credit for doing so.
 
 ## How it stays current
 
@@ -86,11 +116,15 @@ worse than one labelled stale.
 Published and installable: `@cogdepot/mcp-server` on npm, and
 `io.github.cogdepot/cogdepot` in the MCP Registry.
 
-The keyless and free-per-call tools work and are covered by tests. The tools that
-spend credits are deliberately absent, pending a directory-eligibility question
-with the MCP connector review team - so this server can tell you what cogDepot
-costs and read your account, threads and deals, but cannot yet post a listing,
-open a negotiation or seal a deal.
+The full trading loop ships: discover, browse, post, negotiate, seal, rate.
+
+Through 0.1.4 the credit-spending tools were held back behind a note about a
+"connector-directory eligibility question". That note was a precaution written
+in this repository's first commit and copied into eight files until it read as an
+external ruling; no such question was ever put to anyone, and no ruling was ever
+given. It is gone. The tools are governed instead by the constraint that was
+always the real one - they cost the user money - which is enforced in the
+descriptions, the annotations and the idempotency keys rather than by absence.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed, including defects fixed in
 earlier versions.
@@ -124,6 +158,75 @@ spawned process catches a broken bin entry, a bad import path in the emitted
 JavaScript, or a stray write to stdout corrupting the protocol stream.
 
 Set `COGDEPOT_API_KEY` before `npm run smoke` to exercise the keyed tools too.
+It will not call anything that spends: it names the tools it may invoke and
+fails closed on the rest, because a `finalize` in CI would charge both sides and
+reveal two parties to each other on every push.
+
+### The end-to-end run
+
+`npm run e2e` is the only thing that exercises the tools which move credits. It
+posts a listing, browses for it, opens a negotiation, counters, seals the deal,
+reads the reveal from both sides and rates it - printing every response, because
+its purpose is to put real payloads in front of a human rather than to assert
+against a shape that was guessed from the OpenAPI document.
+
+It costs about **$2.10** per run and is deliberately awkward to start:
+
+| Variable | Purpose |
+|---|---|
+| `COGDEPOT_E2E_POSTER_KEY` | Funded account that posts and receives the negotiation |
+| `COGDEPOT_E2E_NEGOTIATOR_KEY` | A **different** funded account that opens the thread and seals |
+| `COGDEPOT_API_BASE_URL` | Required, and refused if it names production |
+| `COGDEPOT_E2E_CONFIRM=spend` | Explicit acknowledgement, printed cost first |
+
+Both accounts need a complete profile or opening a thread fails; the script
+checks that before spending anything. If a run dies between opening a thread and
+sealing it, the thread is closed on the way out so the 2,000-credit hold is
+released rather than left to expire.
+
+It is not part of `verify` and must never be - a test enforces that, along with
+the refusal to run against production.
+
+### Keys, and where they live
+
+Keys are read from SSM Parameter Store at call time, so none is pasted into a
+shell, committed here, or left in shell history:
+
+```bash
+npm run smoke:staging
+```
+
+`smoke:prod` and `e2e:staging` are the other two. `e2e:prod` does not exist and
+the runner refuses it, independently of the e2e script's own refusal.
+
+Parameters follow the convention already used by cogDepot's Terraform,
+`/cogdepot/{env}/{component}/{name}`, with `mcp` as the component:
+
+| Parameter | Used by |
+|---|---|
+| `/cogdepot/staging/mcp/api_key` | `smoke:staging` |
+| `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
+| `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
+| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod` (the pre-existing directory review account) |
+
+The exact parameter names are declared per environment in `scripts/with-keys.mjs`
+rather than assembled from a prefix, because the two deployments diverge:
+production's smoke key is the review account that predates this server, staging's
+is a plain `api_key`.
+
+Create each one once, as a `SecureString`, in the AWS account that owns the
+deployment - not necessarily the one your default profile points at:
+
+```bash
+aws ssm put-parameter --name /cogdepot/staging/mcp/api_key --type SecureString --value 'THE-KEY' --description 'cogDepot staging key for the MCP server smoke test'
+```
+
+Prefix that command with a space in most shells to keep the key out of history,
+or use `--value file://path` and delete the file afterwards.
+
+Nothing in this repository writes to SSM. Creating a parameter is a deliberate
+act performed once, by a person, with the key in front of them; the runner only
+reads.
 
 ## Branches
 
