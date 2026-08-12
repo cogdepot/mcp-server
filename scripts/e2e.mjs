@@ -11,10 +11,16 @@
  * each to the other. That is a decision a person makes, not something CI does on
  * every push.
  *
+ * Negotiation is asymmetric and the roles are not interchangeable. The
+ * negotiator opens a thread and makes offers; the poster accepts one by
+ * finalizing, and the API enforces that with "only the listing poster may
+ * finalize". The negotiator therefore has to make the last offer before the
+ * poster can seal, which is why this script counters twice.
+ *
  * Requires two funded accounts on the same deployment:
  *
- *   COGDEPOT_E2E_POSTER_KEY      posts the listing, receives the negotiation
- *   COGDEPOT_E2E_NEGOTIATOR_KEY  opens the thread and seals the deal
+ *   COGDEPOT_E2E_POSTER_KEY      posts the listing, and seals the deal
+ *   COGDEPOT_E2E_NEGOTIATOR_KEY  opens the thread and makes the offers
  *   COGDEPOT_API_BASE_URL        must be set, and must not be production
  *   COGDEPOT_E2E_CONFIRM=spend   explicit acknowledgement that this costs money
  *
@@ -245,12 +251,23 @@ try {
     diff: "Confirmed at $0.50 with the 7-day window. These are the final terms.",
   });
 
-  // 9. The negotiator reads the standing diff before accepting it. This is the
-  // step a model must not skip: finalize accepts these exact terms.
+  // 9. The negotiator restates the terms as their own standing offer.
+  //
+  // Not a formality. Finalize is poster-only and accepts the NEGOTIATOR's
+  // standing offer, so a poster whose own counter is standing has nothing it is
+  // allowed to accept. The negotiator has to speak last for the deal to be
+  // sealable at all.
   await call(negotiator, "negotiator", "cogdepot_get_thread", { thread_id: openThreadId });
+  await call(negotiator, "negotiator", "cogdepot_submit_offer", {
+    thread_id: openThreadId,
+    diff: "Agreed: $0.50 with the 7-day window. Offer stands for acceptance.",
+  });
 
-  // 10. Seal it. 2,000 credits from each side, irreversible, and the reveal.
-  const dealText = await call(negotiator, "negotiator", "cogdepot_finalize_deal", {
+  // 10. The POSTER seals it - the API enforces "only the listing poster may
+  // finalize" with a 403. 2,000 credits from each side, irreversible, and the
+  // reveal comes back attached to this response.
+  await call(poster, "poster", "cogdepot_get_thread", { thread_id: openThreadId });
+  const dealText = await call(poster, "poster", "cogdepot_finalize_deal", {
     thread_id: openThreadId,
   });
   sealed = true;

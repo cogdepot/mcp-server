@@ -316,6 +316,9 @@ describe("browsing the feed", () => {
     const { text } = await callText(client, TOOL_BROWSE_FEED);
 
     expect(text).toMatch(/end of the feed/i);
+    // An empty feed is not "this account has no listings" - that framing belongs
+    // to get_my_listings, and the two shared a message until it was split.
+    expect(text).not.toMatch(/this account/i);
     await close();
   });
 
@@ -519,6 +522,63 @@ describe("the negotiation path", () => {
 
     expect(isError).toBe(true);
     expect(text).toContain("upstream exploded");
+    await close();
+  });
+
+  it("renders the inbox array without leaking uUSD", async () => {
+    // Regression. /v1/listings/{id}/threads returns a BARE ARRAY, and the first
+    // version rendered it with renderRecord, which iterates indices - so every
+    // thread came out as "- **0**: {json}" with amount_micro: 1000000 raw
+    // inside. Caught by the live e2e, not by a mock, because the shape had been
+    // assumed rather than read.
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/listings/l-1/threads": {
+          status: 200,
+          body: [
+            {
+              id: "cafbce10-9f9c-47f0-a8da-33f9642a2538",
+              thread_id: "cafbce10-9f9",
+              status: "open",
+              turn: "poster",
+              amount_micro: 1000000,
+            },
+          ],
+        },
+      }).impl,
+    );
+
+    const { client, close } = await connect();
+    const { text, isError } = await callText(client, TOOL_LIST_LISTING_THREADS, {
+      listing_id: "l-1",
+    });
+
+    expect(isError).toBe(false);
+    expect(text).not.toContain("amount_micro");
+    expect(text).not.toContain("1000000");
+    expect(text).toContain("2,000 credits ($1.00)");
+    // The truncated thread_id must still carry its warning inside a list.
+    expect(text).toMatch(/NOT usable as an id/);
+    // And the real id must survive, or a model cannot act on the inbox at all.
+    expect(text).toContain("cafbce10-9f9c-47f0-a8da-33f9642a2538");
+    await close();
+  });
+
+  it("says the inbox is empty rather than rendering nothing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      routeFetch({
+        "cogdepot.json": { status: 200, body: DISCOVERY },
+        "/v1/listings/l-1/threads": { status: 200, body: [] },
+      }).impl,
+    );
+
+    const { client, close } = await connect();
+    const { text } = await callText(client, TOOL_LIST_LISTING_THREADS, { listing_id: "l-1" });
+
+    expect(text).toMatch(/no negotiations have been opened/i);
     await close();
   });
 

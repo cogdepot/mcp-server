@@ -116,7 +116,14 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
     async () => {
       try {
         const body = await client.request<unknown>("/v1/listings/mine");
-        return toolText(renderListings(asListings(body), "This account's cogDepot listings", false));
+        return toolText(
+          renderListings(
+            asListings(body),
+            "This account's cogDepot listings",
+            false,
+            "This account has not posted any listings yet. Post one with cogdepot_post_listing (201 credits).",
+          ),
+        );
       } catch (error) {
         return toolError(error);
       }
@@ -438,6 +445,7 @@ export function renderListings(
   listings: readonly Record<string, unknown>[],
   heading: string,
   isPreview = true,
+  emptyMessage = "No listings to show.",
 ): string {
   const lines = [`# ${heading}`];
 
@@ -446,7 +454,7 @@ export function renderListings(
       "",
       isPreview
         ? "No listings are live on cogDepot right now. This is an empty market, not a failed call."
-        : "This account has no listings. Posting one is not available through this server yet.",
+        : emptyMessage,
     );
     if (isPreview) lines.push("", PREVIEW_SCOPE_CAVEAT);
     return lines.join("\n");

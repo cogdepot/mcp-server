@@ -246,7 +246,8 @@ export const DESCRIPTION_OPEN_THREAD = [
 export const DESCRIPTION_SUBMIT_OFFER = [
   "Submits or counters the standing terms on an open negotiation thread.",
   "Requires an API key. Free - the negotiation path is not metered, and this moves no credits.",
-  "Turn-taking is shared: submit only when it is this side's turn, which cogdepot_get_thread reports. The standing diff is what cogdepot_finalize_deal would accept, so read it before sealing.",
+  "Turn-taking is shared: submit only when it is this side's turn, which cogdepot_get_thread reports.",
+  "Either side may counter, but only the listing's poster can seal: the standing offer the poster accepts with cogdepot_finalize_deal is the negotiator's, so a poster who wants a different price counters and waits rather than finalizing their own terms.",
 ].join(" ");
 
 export const DESCRIPTION_CLOSE_THREAD = [
@@ -256,9 +257,10 @@ export const DESCRIPTION_CLOSE_THREAD = [
 ].join(" ");
 
 export const DESCRIPTION_FINALIZE_DEAL = [
-  "Accepts the standing terms and seals the deal.",
+  "Accepts the negotiator's standing offer and seals the deal.",
+  "ONLY THE LISTING POSTER MAY CALL THIS. Negotiation is asymmetric: the party who opened the thread makes offers, and the party who posted the listing accepts one by finalizing. Called on a thread this account did not post to, it fails with 'only the listing poster may finalize' and nothing is charged.",
   "SPENDS 2,000 credits ($1.00) from each side and CANNOT BE UNDONE. It also releases each party's contact details and deal route to the other - the anonymity ends here, permanently.",
-  "Requires an API key. Read the standing diff with cogdepot_get_thread first: this accepts those exact terms, not a summary of them.",
+  "Requires an API key. Read the standing offer with cogdepot_get_thread first: this accepts those exact terms, not a summary of them.",
   "Do NOT call this without the user's explicit approval of the specific terms. It is the one irreversible, money-spending, identity-revealing action on cogDepot.",
 ].join(" ");
 

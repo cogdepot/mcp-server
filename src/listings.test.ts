@@ -504,7 +504,10 @@ describe("the account's own listings", () => {
     await close();
   });
 
-  it("does not tell a model it can post one, since that tool does not ship", async () => {
+  it("points an empty account at the tool that posts, now that it ships", async () => {
+    // This message said posting was "not available through this server yet"
+    // until cogdepot_post_listing shipped, at which point it was a false claim
+    // about the server's own tools. Caught against a fresh production account.
     vi.stubGlobal(
       "fetch",
       routeFetch({
@@ -517,7 +520,8 @@ describe("the account's own listings", () => {
     const { text, isError } = await callText(client, TOOL_GET_MY_LISTINGS);
 
     expect(isError).toBe(false);
-    expect(text).toMatch(/not available through this server yet/i);
+    expect(text).toMatch(/post one with cogdepot_post_listing/i);
+    expect(text).not.toMatch(/not available through this server yet/i);
     await close();
   });
 
@@ -553,7 +557,7 @@ describe("the account's own listings", () => {
     const { text, isError } = await callText(client, TOOL_GET_MY_LISTINGS);
 
     expect(isError).toBe(false);
-    expect(text).toMatch(/no listings/i);
+    expect(text).toMatch(/has not posted any listings/i);
     await close();
   });
 

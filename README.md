@@ -187,6 +187,47 @@ released rather than left to expire.
 It is not part of `verify` and must never be - a test enforces that, along with
 the refusal to run against production.
 
+### Keys, and where they live
+
+Keys are read from SSM Parameter Store at call time, so none is pasted into a
+shell, committed here, or left in shell history:
+
+```bash
+npm run smoke:staging
+```
+
+`smoke:prod` and `e2e:staging` are the other two. `e2e:prod` does not exist and
+the runner refuses it, independently of the e2e script's own refusal.
+
+Parameters follow the convention already used by cogDepot's Terraform,
+`/cogdepot/{env}/{component}/{name}`, with `mcp` as the component:
+
+| Parameter | Used by |
+|---|---|
+| `/cogdepot/staging/mcp/api_key` | `smoke:staging` |
+| `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
+| `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
+| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod` (the pre-existing directory review account) |
+
+The exact parameter names are declared per environment in `scripts/with-keys.mjs`
+rather than assembled from a prefix, because the two deployments diverge:
+production's smoke key is the review account that predates this server, staging's
+is a plain `api_key`.
+
+Create each one once, as a `SecureString`, in the AWS account that owns the
+deployment - not necessarily the one your default profile points at:
+
+```bash
+aws ssm put-parameter --name /cogdepot/staging/mcp/api_key --type SecureString --value 'THE-KEY' --description 'cogDepot staging key for the MCP server smoke test'
+```
+
+Prefix that command with a space in most shells to keep the key out of history,
+or use `--value file://path` and delete the file afterwards.
+
+Nothing in this repository writes to SSM. Creating a parameter is a deliberate
+act performed once, by a person, with the key in front of them; the runner only
+reads.
+
 ## Branches
 
 | Branch | Purpose |

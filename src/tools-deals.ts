@@ -47,7 +47,7 @@ import {
   TOOL_RATE_DEAL,
   TOOL_SUBMIT_OFFER,
 } from "./strings.js";
-import { renderRecord } from "./render.js";
+import { renderField, renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
 /**
@@ -184,6 +184,58 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
 }
 
 /**
+ * Renders the poster's inbox, which arrives as a bare JSON array.
+ *
+ * `renderRecord` cannot be used here and the first version that did shipped a
+ * defect: given an array it iterates the indices, so every thread came out as
+ * `- **0**: { ...json... }` with `amount_micro: 1000000` sitting raw inside it.
+ * That is the uUSD leak this package exists to prevent, reintroduced through a
+ * renderer that was never meant to see a list - and it took a real API response
+ * to expose it, because the shape was assumed rather than read.
+ *
+ * Each thread is rendered field by field instead, so the uUSD conversion and the
+ * short-`thread_id` warning both apply exactly as they do on a single thread.
+ */
+function renderThreadList(heading: string, body: unknown): string {
+  const threads = asThreads(body);
+  const lines = [`# ${heading}`];
+
+  if (threads.length === 0) {
+    lines.push("", "No negotiations have been opened on this listing yet.");
+    return lines.join("\n");
+  }
+
+  lines.push("", `${threads.length} thread${threads.length === 1 ? "" : "s"}.`);
+  for (const thread of threads) {
+    const id = typeof thread["id"] === "string" ? thread["id"] : "(unidentified thread)";
+    lines.push("", `## Thread ${id}`);
+    for (const [key, value] of Object.entries(thread)) {
+      if (key === "id") continue; // already the heading
+      lines.push(...renderField(key, value));
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Narrows the inbox response to an array of threads.
+ *
+ * Tolerant of a bare array and of a `{threads:[...]}` wrapper. The live staging
+ * response is the former; the wrapper is accepted so a later API change does not
+ * turn a free read into a failure.
+ */
+function asThreads(body: unknown): Record<string, unknown>[] {
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+
+  if (Array.isArray(body)) return body.filter(isRecord);
+  if (isRecord(body) && Array.isArray(body["threads"])) {
+    return (body["threads"] as unknown[]).filter(isRecord);
+  }
+  return [];
+}
+
+/**
  * The negotiation path: open, counter, close, seal.
  *
  * Only two of these move credits, and the annotations say which. `close` and
@@ -214,10 +266,10 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
     },
     async ({ listing_id }) => {
       try {
-        const threads = await client.request<Record<string, unknown>>(
+        const threads = await client.request<unknown>(
           `/v1/listings/${encodeURIComponent(listing_id)}/threads`,
         );
-        return toolText(renderRecord(`Negotiations on listing ${listing_id}`, threads));
+        return toolText(renderThreadList(`Negotiations on listing ${listing_id}`, threads));
       } catch (error) {
         return toolError(error);
       }
