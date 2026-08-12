@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.2.0 - 2026-08-12
+
+The full trading loop ships. Through 0.1.4 this server could say what cogDepot
+cost and read an account, but could not show a listing, post one, negotiate, or
+seal a deal. It now does all of it.
+
+### Added
+
+- **Two ways to see what is trading.** `cogdepot_preview_listings` is keyless,
+  anonymous and free - cogDepot's own shop window, a sample of up to 20 live
+  listings, so the server is useful before anyone has a key.
+  `cogdepot_get_my_listings` is keyed and free, showing only the caller's own.
+- **The tools that spend credits.** `cogdepot_browse_feed` (the only tool that
+  can search, 1 credit), `cogdepot_get_listing` (1 credit), `cogdepot_post_listing`
+  (201 credits, price given in dollars), `cogdepot_open_thread` (2,000-credit
+  hold), `cogdepot_submit_offer` and `cogdepot_close_thread` (free),
+  `cogdepot_finalize_deal` (2,000 credits per side, irreversible), and
+  `cogdepot_list_listing_threads` (the poster's inbox, free).
+
+  Every one that moves credits states its price in the description a model reads
+  before calling, declares `readOnlyHint: false`, and sends an idempotency key
+  so an ambiguous outcome can be retried rather than paid for twice. The two
+  irreversible calls - finalize and close - declare `destructiveHint: true`, so
+  a host that prompts before irreversible actions prompts on them.
+
+### Changed
+
+- **The gate in front of the spending tools is gone.** They were held back
+  through 0.1.4 behind a note about a "connector-directory eligibility question".
+  That note was a design-time precaution written in the first commit and repeated
+  into eight files until it read as an external ruling; no such question was ever
+  put to anyone. The tools are governed now by the constraint that was always the
+  real one - they cost the user money - enforced in the descriptions, the
+  annotations and the idempotency keys.
+- Topping up a balance is deliberately still not a tool. It moves real money and
+  its routes are payment rails, which belong on the website.
+
+### Fixed
+
+- **`cogdepot_finalize_deal` is poster-only**, which the tool now states. The API
+  returns 403 to anyone but the listing's poster, and `cogdepot_submit_offer`
+  explains that the negotiator must make the last offer for the poster to have
+  something to accept. The earlier descriptions said neither.
+- **A µUSD leak in the poster's inbox.** `/v1/listings/{id}/threads` returns a
+  bare array, and the generic record renderer dumped each thread as raw JSON with
+  `amount_micro` intact - the exact class of defect fixed in 0.1.3, in a new
+  place. Threads are now rendered field by field, in credits and dollars.
+- `cogdepot_get_my_listings` on an empty account said posting was "not available
+  through this server yet", which stopped being true the moment `post_listing`
+  shipped. It now points at the tool that posts.
+
 ## 0.1.4 - 2026-08-10
 
 Documentation only. The code is byte-for-byte what 0.1.3 shipped; upgrading
