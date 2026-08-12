@@ -122,4 +122,37 @@ describe("the handler", () => {
       else process.env["COGDEPOT_API_BASE_URL"] = previous;
     }
   });
+
+  it("answers a real MCP initialize over its fetch entrypoint", async () => {
+    // Drives handler.fetch directly - no socket - so the actual HTTP request
+    // path is covered, not only the in-memory factory. This is the in-process
+    // counterpart to the manual curl check.
+    const handler = createRemoteHandler();
+    const response = await handler.fetch(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "remote-test", version: "0" },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    // The body may be SSE-framed (event: message / data: {...}); assert on the
+    // serverInfo payload rather than the framing.
+    const text = await response.text();
+    expect(text).toContain("cogdepot");
+    expect(text).toContain("2025-06-18");
+  });
 });

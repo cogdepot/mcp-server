@@ -16,6 +16,7 @@
 
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import { createRemoteHandler } from "../dist/remote.js";
 
@@ -42,8 +43,11 @@ async function readBody(req) {
 
 const server = createServer(async (req, res) => {
   try {
-    const url = `http://${req.headers.host ?? `localhost:${port}`}${req.url ?? "/"}`;
-    const request = new Request(url, {
+    // Origin is this local server, not the client's Host header - the runner
+    // serves one handler and never needs the caller to name the host, and
+    // trusting Host would be a header-injection seam once Phase 2 derives the
+    // resource-metadata URL from the request.
+    const request = new Request(`http://localhost:${port}${req.url ?? "/"}`, {
       method: req.method,
       headers: toHeaders(req.headers),
       body: await readBody(req),
@@ -53,14 +57,18 @@ const server = createServer(async (req, res) => {
 
     res.writeHead(response.status, Object.fromEntries(response.headers));
     if (response.body) {
-      // Pipe rather than buffer, so a streamed (SSE) response is not held whole.
-      Readable.fromWeb(response.body).pipe(res);
+      // Stream rather than buffer, so a long-lived SSE response is not held
+      // whole. pipeline (not .pipe) so a mid-stream error - a client that
+      // disconnects from an SSE stream - is handled rather than emitted as an
+      // unhandled 'error' that would crash the process.
+      await pipeline(Readable.fromWeb(response.body), res);
     } else {
       res.end();
     }
   } catch (error) {
     // stderr, never stdout: nothing here shares the protocol channel, but the
-    // habit is the codebase's, and a request failure should not be silent.
+    // habit is the codebase's, and a request failure should not be silent. A
+    // client-disconnect during streaming lands here too, which is expected.
     process.stderr.write(`remote: request failed: ${error instanceof Error ? error.message : error}\n`);
     if (!res.headersSent) res.writeHead(500);
     res.end();

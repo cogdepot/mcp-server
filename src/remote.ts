@@ -47,7 +47,7 @@ export function apiKeyFromRequest(request: Request): string | undefined {
     if (token) return token;
   }
   const direct = request.headers.get(REMOTE_API_KEY_HEADER)?.trim();
-  return direct ? direct : undefined;
+  return direct || undefined;
 }
 
 /**
