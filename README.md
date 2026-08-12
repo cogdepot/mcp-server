@@ -144,6 +144,28 @@ No telemetry, no analytics, no logging to any remote destination. Your API key
 is held in memory, sent only to `api.cogdepot.com` over HTTPS, and never written
 to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
 
+## Remote server (preview)
+
+The server also runs over HTTP, not only stdio. `src/remote.ts` reuses the same
+tool-building core; the only difference is that the key travels **per request**
+in a header rather than per process in the environment. A request with no key
+still answers the keyless discovery tools, exactly as the stdio build does.
+
+```bash
+COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
+```
+
+Send the key as `Authorization: Bearer <key>` (the form a static-header connector
+uses) or an `x-cogdepot-api-key` header. This is **Phase 1**: a static-header
+connector, one shared credential, not per-user OAuth. Per-user OAuth against
+Cognito - a protected-resource-metadata route, bearer verification, and a `401`
+challenge for keyed tools - is the next phase and is not wired yet. The
+`apiKeyFromRequest` function is the seam where it lands.
+
+`scripts/serve-remote.mjs` is a local runner, not the deployment; a hosted
+deployment adapts the same `fetch` handler to its target (a Lambda event, for
+example).
+
 ## Development
 
 ```bash

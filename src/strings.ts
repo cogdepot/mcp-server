@@ -14,6 +14,17 @@ export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
 
 /**
+ * The request header the remote transport reads a cogDepot API key from.
+ *
+ * Phase 1 of the remote server (see remote.ts) is a static-header connector: the
+ * key travels per request rather than per process. This is the fallback header;
+ * `Authorization: Bearer <key>` is also accepted, which is the form Claude's
+ * static-header connector sends. In Phase 2 the Authorization bearer becomes an
+ * OAuth token to verify rather than a raw key.
+ */
+export const REMOTE_API_KEY_HEADER = "x-cogdepot-api-key";
+
+/**
  * The keyless listing preview, used only when the discovery document does not
  * state one.
  *

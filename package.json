@@ -41,6 +41,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "serve:remote": "npm run build && node scripts/serve-remote.mjs",
     "smoke:staging": "node scripts/with-keys.mjs staging smoke",
     "smoke:prod": "node scripts/with-keys.mjs prod smoke",
     "e2e": "npm run build && node scripts/e2e.mjs",
