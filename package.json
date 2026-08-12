@@ -42,6 +42,7 @@
     "coverage": "vitest run --coverage",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "serve:remote": "npm run build && node scripts/serve-remote.mjs",
+    "build:lambda": "node scripts/build-lambda.mjs",
     "smoke:staging": "node scripts/with-keys.mjs staging smoke",
     "smoke:prod": "node scripts/with-keys.mjs prod smoke",
     "e2e": "npm run build && node scripts/e2e.mjs",
@@ -59,6 +60,7 @@
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.0.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },

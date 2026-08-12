@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Remote MCP server for cogDepot - a Lambda behind an HTTP API on a custom
+  domain. The Lambda runs the same createRemoteHandler() the stdio build wraps;
+  only the transport differs. Deployed with `aws cloudformation package` +
+  `deploy` from a pre-built esbuild bundle (npm run build:lambda), so no SAM CLI
+  or in-pipeline build is required.
+
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues: [staging, production]
+
+  DomainName:
+    Type: String
+    Description: Custom domain for the MCP server, e.g. staging.mcp.cogdepot.com
+
+  CertificateArn:
+    Type: String
+    Description: ACM cert ARN for DomainName (us-east-1). From the foundation Terraform's mcp_certificate_arn output.
+
+  HostedZoneId:
+    Type: String
+    Default: Z06203922NKB14MYQ8LL5
+    Description: Route53 hosted zone for cogdepot.com - same zone the API stack uses.
+
+  ApiBaseUrl:
+    Type: String
+    Description: COGDEPOT_API_BASE_URL - the cogDepot API this stage relays to (https, cogdepot.com host only).
+
+  OAuthIssuer:
+    Type: String
+    Default: ""
+    Description: COGDEPOT_OAUTH_ISSUER - the Cognito user-pool issuer. Empty leaves the server on the Phase 1 static-header model.
+
+  OAuthClientId:
+    Type: String
+    Default: ""
+    Description: COGDEPOT_OAUTH_CLIENT_ID - the agent app-client id tokens are bound to.
+
+  OAuthResource:
+    Type: String
+    Default: ""
+    Description: COGDEPOT_OAUTH_RESOURCE - this server's resource identifier, which must equal the URL a user enters in the connector.
+
+  OAuthScopes:
+    Type: String
+    Default: ""
+    Description: COGDEPOT_OAUTH_SCOPES - space-separated advertised scopes, e.g. "cogdepot/read cogdepot/trade:negotiate cogdepot/trade:finalize".
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [arm64]
+    MemorySize: 256
+    # A cold start reads no secrets and makes no network call until the first
+    # token verification, so this is generous; the 10s OAuth-endpoint budget the
+    # connector allows is the tighter constraint, met by keeping the handler warm.
+    Timeout: 30
+
+Resources:
+  McpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      # SAM creates the custom domain, the ACM mapping, and the Route53 alias
+      # record from this block - the same one-stop domain wiring the API stack uses.
+      Domain:
+        DomainName: !Ref DomainName
+        CertificateArn: !Ref CertificateArn
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+
+  McpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cogdepot-mcp-${Stage}
+      CodeUri: ../../lambda-dist
+      Handler: index.handler
+      Environment:
+        Variables:
+          COGDEPOT_API_BASE_URL: !Ref ApiBaseUrl
+          # All four empty by default -> the remote server stays on the Phase 1
+          # static-header path (resolveOAuthConfig returns undefined). Set together
+          # to turn on the OAuth gate; a half-set config fails the cold start.
+          COGDEPOT_OAUTH_ISSUER: !Ref OAuthIssuer
+          COGDEPOT_OAUTH_CLIENT_ID: !Ref OAuthClientId
+          COGDEPOT_OAUTH_RESOURCE: !Ref OAuthResource
+          COGDEPOT_OAUTH_SCOPES: !Ref OAuthScopes
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  McpUrl:
+    Description: The public MCP server URL - what a user enters as the custom connector.
+    Value: !Sub https://${DomainName}
+  FunctionName:
+    Value: !Ref McpFunction

@@ -101,18 +101,26 @@ export function createRemoteHandler(): McpHttpHandler {
 
   if (!oauth) {
     // OAuth not configured: the Phase 1 static-header transport, unchanged.
-    return createMcpHandler((ctx) => buildServerForRequest(ctx.requestInfo));
+    return createMcpHandler((ctx) => buildServerForRequest(ctx.requestInfo), HANDLER_OPTIONS);
   }
 
   // OAuth configured: the credential comes only from the verified access token,
   // never from a request header, so the factory reads ctx.authInfo alone. A
   // request the gate lets through without a token carries no authInfo and builds
   // the keyless server.
-  const inner = createMcpHandler((ctx) =>
-    buildServer(ctx.authInfo ? { kind: "bearer", value: ctx.authInfo.token } : undefined),
+  const inner = createMcpHandler(
+    (ctx) => buildServer(ctx.authInfo ? { kind: "bearer", value: ctx.authInfo.token } : undefined),
+    HANDLER_OPTIONS,
   );
   return gateWithOAuth(inner, oauth, createCognitoVerifier(oauth));
 }
+
+// Buffered JSON, never SSE. The Lambda + API Gateway deployment answers with a
+// single buffered response (API Gateway does not stream), so a modern exchange
+// must resolve to one JSON body rather than upgrading to an event stream. This is
+// lossless for this server: its tools return a single result and emit no mid-call
+// progress or logging notifications, which are the only thing 'json' mode drops.
+const HANDLER_OPTIONS = { responseMode: "json" } as const;
 
 /** The minimal verifier the gate needs; *createCognitoVerifier* satisfies it. */
 interface AccessTokenVerifier {
