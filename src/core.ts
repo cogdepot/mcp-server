@@ -11,7 +11,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
-import { CogDepotClient } from "./client.js";
+import { CogDepotClient, type Credential } from "./client.js";
 import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
 import { registerAccountTools } from "./tools-account.js";
 import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
@@ -37,9 +37,12 @@ import {
 /**
  * Builds the server with every tool registered.
  *
- * The tool set varies by one thing only: whether an API key is configured.
+ * The tool set varies by one thing only: whether a credential is configured.
  * Without one, the three keyless tools answer and nothing else is advertised,
- * because a tool that can only fail is worse than an absent one.
+ * because a tool that can only fail is worse than an absent one. The credential
+ * is either an API key (stdio's env var, the Phase 1 static header) or a relayed
+ * OAuth access token (the remote OAuth path); both resolve to an account on the
+ * cogDepot side, so the keyed tool set is identical either way.
  *
  * Tools that spend credits ship. They were absent through 0.1.4 behind a note
  * about connector-directory eligibility, which turned out to be a design-time
@@ -51,7 +54,7 @@ import {
  * on, and an idempotency key on every mutating call so an ambiguous outcome is
  * not resolved by charging twice.
  */
-export function buildServer(apiKey?: string): McpServer {
+export function buildServer(credential?: string | Credential): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
   // Free and keyless: always registered, so the server is useful before anyone
@@ -63,11 +66,13 @@ export function buildServer(apiKey?: string): McpServer {
   // question a prospective user asks before deciding a key is worth obtaining.
   registerPreviewTool(server);
 
-  // Keyed but free per call. Registered only when a key is configured: the spec
-  // allows the tool set to vary by the authorization presented, and advertising
-  // tools that can only fail is worse than not advertising them.
-  if (apiKey?.trim()) {
-    const client = new CogDepotClient(apiKey);
+  // Keyed but free per call. Registered only when a credential is present: the
+  // spec allows the tool set to vary by the authorization presented, and
+  // advertising tools that can only fail is worse than not advertising them. The
+  // client normalizes a blank credential to none, so hasKey is the single source
+  // of truth for "is there something to authenticate with".
+  const client = new CogDepotClient(credential);
+  if (client.hasKey) {
     registerAccountTools(server, client);
     registerDealTools(server, client);
     registerMyListingsTool(server, client);

@@ -25,6 +25,17 @@ export const SITE_URL = "https://cogdepot.com";
 export const REMOTE_API_KEY_HEADER = "x-cogdepot-api-key";
 
 /**
+ * The RFC 9728 protected-resource-metadata path.
+ *
+ * When the remote server runs with OAuth configured, a GET here returns the
+ * document that names the Cognito authorization server, and a 401 challenge
+ * points a client at the same path via `WWW-Authenticate: resource_metadata=`.
+ * With OAuth unconfigured the route does not exist - the Phase 1 static-header
+ * transport advertises no authorization server.
+ */
+export const OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
+
+/**
  * The keyless listing preview, used only when the discovery document does not
  * state one.
  *

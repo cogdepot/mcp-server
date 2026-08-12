@@ -54,10 +54,10 @@ export class InvalidOAuthConfigError extends Error {
  * accepting tokens nobody validated.
  */
 export function resolveOAuthConfig(values: {
-  issuer?: string;
-  clientId?: string;
-  resource?: string;
-  scopes?: readonly string[];
+  issuer?: string | undefined;
+  clientId?: string | undefined;
+  resource?: string | undefined;
+  scopes?: readonly string[] | undefined;
 }): OAuthConfig | undefined {
   const issuer = values.issuer?.trim();
   const clientId = values.clientId?.trim();

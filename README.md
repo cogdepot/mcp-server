@@ -45,6 +45,15 @@ Getting a key takes one unauthenticated request and costs nothing - ask the
 | `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the two discovery tools; the account tools are not advertised at all, rather than offered and then failing |
 | `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
 
+The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`npm run serve:remote`), and only when it runs behind per-user OAuth rather than the static-header key. They are set on the deployment, never in a stdio client config. Set all of the issuer, client id and resource together, or none - a half-set config is refused at startup. Unset (the default), the remote server stays on the static-header model and the stdio server ignores them entirely.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `COGDEPOT_OAUTH_ISSUER` | no | The Cognito user-pool issuer whose access tokens the remote server accepts, e.g. `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXX`. https only |
+| `COGDEPOT_OAUTH_CLIENT_ID` | no | The app-client id a presented token's `client_id` claim must equal - the binding that stands in for the absent `aud` on a Cognito access token |
+| `COGDEPOT_OAUTH_RESOURCE` | no | This server's own resource identifier, published in the protected-resource-metadata document a `401` points clients at. https only |
+| `COGDEPOT_OAUTH_SCOPES` | no | Space- or comma-separated scopes advertised as available, e.g. `cogdepot/read cogdepot/trade:finalize`. Advertised only; cogDepot itself is the authority on which scope each action requires |
+
 ## Tools
 
 Without a key:

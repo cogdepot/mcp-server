@@ -51,6 +51,23 @@ If no key is set, the server still runs and answers the keyless tools - the two
 discovery tools and the listing preview. Tools that need an account are not
 advertised at all, rather than offered and then failing.
 
+## Remote OAuth mode
+
+The remote HTTP server (`npm run serve:remote`) can run behind per-user OAuth
+instead of a shared static-header key. It is enabled on the deployment by
+`COGDEPOT_OAUTH_ISSUER`, `COGDEPOT_OAUTH_CLIENT_ID` and `COGDEPOT_OAUTH_RESOURCE`
+(with optional `COGDEPOT_OAUTH_SCOPES`); unset, none of this applies and the
+stdio server ignores these variables entirely.
+
+In this mode the credential is the user's own Cognito **access token**, presented
+as `Authorization: Bearer`. The server verifies the token's signature and issuer
+against the configured user pool, then relays that same token to the `cogdepot.com`
+host - it is not exchanged for a key and, like the API key, is held only in memory
+for the request, never written to disk, never logged, and never returned in a tool
+response. A token that fails verification is refused with a `401`; a request with
+no token is served the keyless tools. No token is sent anywhere other than the
+`cogdepot.com` host the base URL already constrains.
+
 ## Retention
 
 This package retains nothing between runs. It writes no files, no cache and no
