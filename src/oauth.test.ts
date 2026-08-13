@@ -150,10 +150,19 @@ describe("authorizationServerMetadata", () => {
     expect(doc["scopes_supported"]).toEqual(CONFIG.scopes);
   });
 
-  it("passes Cognito's real authorize and token endpoints through unchanged", () => {
+  it("re-homes the authorize and token endpoints onto this server so they share the issuer's origin", () => {
+    // A strict client expects the endpoints on the same origin as the issuer; the
+    // proxied paths route back to Cognito. The trailing slash on CONFIG.resource
+    // must not double up.
     const doc = authorizationServerMetadata(CONFIG, upstream);
-    expect(doc["authorization_endpoint"]).toBe(upstream.authorization_endpoint);
-    expect(doc["token_endpoint"]).toBe(upstream.token_endpoint);
+    expect(doc["authorization_endpoint"]).toBe("https://mcp.cogdepot.com/oauth/authorize");
+    expect(doc["token_endpoint"]).toBe("https://mcp.cogdepot.com/oauth/token");
+  });
+
+  it("states the grant types explicitly and passes the signing keys through as Cognito's", () => {
+    const doc = authorizationServerMetadata(CONFIG, upstream);
+    expect(doc["grant_types_supported"]).toEqual(["authorization_code", "refresh_token"]);
+    // jwks stays Cognito's - the tokens are Cognito's and carry Cognito's iss.
     expect(doc["jwks_uri"]).toBe(upstream.jwks_uri);
   });
 });

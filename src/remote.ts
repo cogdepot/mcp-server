@@ -44,7 +44,9 @@ import {
 } from "./oauth.js";
 import {
   OAUTH_AUTHORIZATION_SERVER_PATH,
+  OAUTH_AUTHORIZE_PATH,
   OAUTH_PROTECTED_RESOURCE_PATH,
+  OAUTH_TOKEN_PATH,
   REMOTE_API_KEY_HEADER,
 } from "./strings.js";
 
@@ -154,35 +156,32 @@ export function gateWithOAuth(
   config: OAuthConfig,
   verifier: AccessTokenVerifier,
 ): McpHttpHandler {
-  // Per-handler cache of the proxied authorization-server metadata. Cognito's
-  // discovery is stable within a key-rotation window and this document is fetched
-  // only at connector setup, so one fetch per container is plenty. Held in the
-  // closure rather than at module scope so each handler - and each test - starts
-  // with a clean cache. Only a successful fetch is cached, so a transient upstream
-  // failure is retried on the next request.
-  let authorizationServerCache: Record<string, unknown> | undefined;
-  const serveAuthorizationServer = async (): Promise<Response> => {
-    if (!authorizationServerCache) {
-      let upstream: Record<string, unknown>;
-      try {
-        const res = await fetch(`${config.issuer}/.well-known/openid-configuration`);
-        if (!res.ok) {
-          return jsonResponse(
-            { error: "server_error", error_description: `authorization server discovery returned ${res.status}` },
-            502,
-          );
-        }
-        upstream = (await res.json()) as Record<string, unknown>;
-      } catch {
-        return jsonResponse(
-          { error: "server_error", error_description: "authorization server discovery is unreachable" },
-          502,
-        );
-      }
-      authorizationServerCache = authorizationServerMetadata(config, upstream);
+  // Cognito's raw OpenID discovery, fetched once per container. Both the served
+  // authorization-server metadata and the authorize/token proxy targets derive
+  // from it. Held in the closure, not at module scope, so each handler - and each
+  // test - starts clean; only a success is cached, so a transient upstream failure
+  // is retried on the next request.
+  let upstreamDiscoveryCache: Record<string, unknown> | undefined;
+  const upstreamDiscovery = async (): Promise<Record<string, unknown> | undefined> => {
+    if (upstreamDiscoveryCache) return upstreamDiscoveryCache;
+    try {
+      const res = await fetch(`${config.issuer}/.well-known/openid-configuration`);
+      if (!res.ok) return undefined;
+      upstreamDiscoveryCache = (await res.json()) as Record<string, unknown>;
+      return upstreamDiscoveryCache;
+    } catch {
+      return undefined;
     }
-    return jsonResponse(authorizationServerCache, 200);
   };
+  const upstreamEndpoint = (upstream: Record<string, unknown>, key: string): string | undefined => {
+    const value = upstream[key];
+    return typeof value === "string" ? value : undefined;
+  };
+  const upstreamUnreachable = (): Response =>
+    jsonResponse(
+      { error: "server_error", error_description: "authorization server is unreachable" },
+      502,
+    );
 
   return {
     close: inner.close,
@@ -204,11 +203,38 @@ export function gateWithOAuth(
         return jsonResponse(protectedResourceMetadata(config), 200);
       }
 
-      // The proxied authorization-server metadata (Cognito's, plus the S256 PKCE
-      // advertisement it omits). Unauthenticated, like the protected-resource
-      // document above.
+      // The proxied authorization-server metadata (Cognito's, re-homed to this
+      // origin, plus the S256 PKCE advertisement Cognito omits). Unauthenticated,
+      // like the protected-resource document above.
       if (request.method === "GET" && url.pathname === OAUTH_AUTHORIZATION_SERVER_PATH) {
-        return serveAuthorizationServer();
+        const upstream = await upstreamDiscovery();
+        if (!upstream) return upstreamUnreachable();
+        return jsonResponse(authorizationServerMetadata(config, upstream), 200);
+      }
+
+      // Authorize: 302 the browser on to Cognito's hosted UI, forwarding the query
+      // (client_id, redirect_uri, scope, PKCE challenge, ...) untouched. The user
+      // logs in and consents there; Cognito redirects to the client's own callback.
+      if (request.method === "GET" && url.pathname === OAUTH_AUTHORIZE_PATH) {
+        const upstream = await upstreamDiscovery();
+        const authorizeEndpoint = upstream && upstreamEndpoint(upstream, "authorization_endpoint");
+        if (!authorizeEndpoint) return upstreamUnreachable();
+        return new Response(null, {
+          status: 302,
+          headers: { location: `${authorizeEndpoint}${url.search}` },
+        });
+      }
+
+      // Token: forward the code exchange (and refreshes) to Cognito's token
+      // endpoint and return its response verbatim. Client authentication rides
+      // along as the client sent it - the Authorization header for
+      // client_secret_basic, the form body for client_secret_post - and the tokens
+      // Cognito mints are returned unchanged.
+      if (request.method === "POST" && url.pathname === OAUTH_TOKEN_PATH) {
+        const upstream = await upstreamDiscovery();
+        const tokenEndpoint = upstream && upstreamEndpoint(upstream, "token_endpoint");
+        if (!tokenEndpoint) return upstreamUnreachable();
+        return proxyToken(tokenEndpoint, request);
       }
 
       const token = bearerFromAuthorization(request);
@@ -222,6 +248,11 @@ export function gateWithOAuth(
       try {
         authInfo = await verifier.verifyAccessToken(token);
       } catch (error) {
+        // Log why a presented token was rejected - the single most useful line
+        // when a connector's OAuth flow completes but the token then 401s.
+        process.stderr.write(
+          `mcp: access token rejected: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
         return unauthorized(url, error);
       }
       return inner.fetch(request, { ...options, authInfo });
@@ -270,6 +301,34 @@ function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+/**
+ * Forwards a token-endpoint request to the upstream authorization server and
+ * returns its response verbatim. The client's own authentication rides along as
+ * it sent it - the Authorization header for client_secret_basic, the form body
+ * for client_secret_post - so the tokens Cognito mints are returned unchanged. An
+ * unreachable upstream answers 502; every other status is passed through, since a
+ * 400 invalid_grant from Cognito is a real answer the client must see.
+ */
+async function proxyToken(tokenEndpoint: string, request: Request): Promise<Response> {
+  const headers: Record<string, string> = {
+    "content-type": request.headers.get("content-type") ?? "application/x-www-form-urlencoded",
+  };
+  const authorization = request.headers.get("authorization");
+  if (authorization) headers["authorization"] = authorization;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(tokenEndpoint, { method: "POST", headers, body: await request.text() });
+  } catch {
+    return jsonResponse({ error: "server_error", error_description: "token endpoint is unreachable" }, 502);
+  }
+  const body = await upstream.text();
+  return new Response(body, {
+    status: upstream.status,
+    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
   });
 }
 

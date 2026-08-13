@@ -342,8 +342,68 @@ describe("the OAuth gate", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body["code_challenge_methods_supported"]).toEqual(["S256"]);
     expect(body["issuer"]).toBe(OAUTH_CONFIG.resource);
-    expect(body["authorization_endpoint"]).toBe(cognitoDiscovery.authorization_endpoint);
-    expect(body["token_endpoint"]).toBe(cognitoDiscovery.token_endpoint);
+    // Endpoints re-homed onto this server (which proxies to Cognito), so the whole
+    // document shares one origin.
+    expect(body["authorization_endpoint"]).toBe(`${OAUTH_CONFIG.resource}/oauth/authorize`);
+    expect(body["token_endpoint"]).toBe(`${OAUTH_CONFIG.resource}/oauth/token`);
+  });
+
+  it("proxies /oauth/authorize as a 302 to Cognito, forwarding the query untouched", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const { handler, seen } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/authorize?client_id=abc&scope=cogdepot%2Fread&code_challenge=xyz"),
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${cognitoDiscovery.authorization_endpoint}?client_id=abc&scope=cogdepot%2Fread&code_challenge=xyz`,
+    );
+    expect(seen).toHaveLength(0);
+  });
+
+  it("proxies /oauth/token: forwards the exchange to Cognito and returns its response verbatim", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    let forwardedTo: string | undefined;
+    let forwardedBody: string | undefined;
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      .mockImplementationOnce(async (input, init) => {
+        forwardedTo = String(input);
+        forwardedBody = String(init?.body ?? "");
+        return new Response(JSON.stringify({ access_token: "tok", token_type: "Bearer" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      });
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code&code=the-code&code_verifier=v",
+      }),
+    );
+
+    expect(forwardedTo).toBe(cognitoDiscovery.token_endpoint);
+    expect(forwardedBody).toContain("grant_type=authorization_code");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as Record<string, unknown>).toMatchObject({ access_token: "tok" });
   });
 
   it("answers 502 when the upstream Cognito discovery cannot be fetched", async () => {

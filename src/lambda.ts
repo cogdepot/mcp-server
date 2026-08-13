@@ -46,8 +46,18 @@ interface ApiGatewayV2Result {
 }
 
 export async function handler(event: ApiGatewayV2Event): Promise<ApiGatewayV2Result> {
-  const response = await remoteHandler.fetch(toRequest(event));
-  return toResult(response);
+  const request = toRequest(event);
+  const response = await remoteHandler.fetch(request);
+  const result = await toResult(response);
+  // Access log: one compact line per request so a failing OAuth flow can be
+  // traced by path and status in CloudWatch. Auth failures answer 401/502 rather
+  // than throwing, so without this they leave no trace.
+  const path = event.rawPath ?? "/";
+  const authed = event.headers?.["authorization"] ? " bearer" : "";
+  // stderr, not stdout: stdout is reserved as the stdio transport's protocol
+  // channel (a shipped-wide rule), and CloudWatch captures both streams anyway.
+  process.stderr.write(`mcp ${event.requestContext.http.method} ${path}${authed} -> ${result.statusCode}\n`);
+  return result;
 }
 
 function toRequest(event: ApiGatewayV2Event): Request {

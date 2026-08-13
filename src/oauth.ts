@@ -24,6 +24,8 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 
+import { OAUTH_AUTHORIZE_PATH, OAUTH_TOKEN_PATH } from "./strings.js";
+
 /**
  * Resolved, validated OAuth configuration. Absent (undefined) means OAuth is not
  * configured and the remote server stays on the Phase 1 static-header model.
@@ -108,30 +110,38 @@ export function protectedResourceMetadata(config: OAuthConfig): Record<string, u
  * Cognito's behalf.
  *
  * It is Cognito's own discovery document (`upstream`, fetched from the pool's
- * OpenID configuration) with three corrections:
+ * OpenID configuration) with the corrections a self-consistent, spec-strict
+ * document needs:
  *
- *  - `issuer` becomes this server's resource URL, because that is the URL the
- *    client fetched this document from and RFC 8414 requires the two to match;
- *  - `code_challenge_methods_supported` is added as `["S256"]` - the whole reason
- *    this proxy exists, since Cognito supports S256 PKCE but does not advertise it;
- *  - `scopes_supported` is set to the resource server's trading scopes rather than
- *    Cognito's default openid/email/phone/profile, so the advertised scopes are the
- *    ones this resource actually understands.
+ *  - `issuer`, `authorization_endpoint` and `token_endpoint` are all re-homed to
+ *    THIS server, so a client that expects the endpoints to share the issuer's
+ *    origin is satisfied. The two endpoints resolve to `/oauth/authorize` and
+ *    `/oauth/token` here, which proxy on to Cognito - so Cognito still runs the
+ *    login and mints the tokens, but the client only ever talks to one origin;
+ *  - `code_challenge_methods_supported` is added as `["S256"]` - the reason this
+ *    proxy exists at all, since Cognito supports S256 PKCE but omits the field a
+ *    client checks before starting;
+ *  - `grant_types_supported` is stated explicitly rather than left to the client's
+ *    default, and `scopes_supported` is set to the resource server's trading scopes
+ *    rather than Cognito's default openid/email/phone/profile.
  *
- * Every other field - crucially `authorization_endpoint` and `token_endpoint` -
- * is passed through unchanged, so the client drives the real Cognito hosted-UI and
- * token endpoints. The tokens they mint carry Cognito's own `iss`, which is what
- * the verifier and cogDepot check; the swapped `issuer` here is only the discovery
- * identifier the client used, which it does not reconcile against the token.
+ * jwks_uri and the signing-algorithm fields pass through as Cognito's, because the
+ * tokens are still Cognito's and carry Cognito's `iss` - which is what the verifier
+ * and cogDepot check. The re-homed issuer is only the discovery identity the client
+ * talks to; it is never reconciled against the token.
  */
 export function authorizationServerMetadata(
   config: OAuthConfig,
   upstream: Record<string, unknown>,
 ): Record<string, unknown> {
+  const base = config.resource.replace(/\/+$/, "");
   return {
     ...upstream,
     issuer: config.resource,
+    authorization_endpoint: `${base}${OAUTH_AUTHORIZE_PATH}`,
+    token_endpoint: `${base}${OAUTH_TOKEN_PATH}`,
     scopes_supported: [...config.scopes],
+    grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
   };
 }

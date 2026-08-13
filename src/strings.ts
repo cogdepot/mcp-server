@@ -49,6 +49,21 @@ export const OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resou
 export const OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
 
 /**
+ * The authorize and token endpoints this server exposes and proxies to Cognito.
+ *
+ * The authorization-server metadata names the backing endpoints, and a strict
+ * client expects them to sit on the same origin as the issuer it just read. So
+ * rather than pointing the client straight at Cognito's *.amazoncognito.com host
+ * (a cross-origin the client rejects right after reading the metadata), the
+ * metadata names these two paths on this server: `/oauth/authorize` 302-redirects
+ * the browser on to Cognito, and `/oauth/token` forwards the code exchange to
+ * Cognito and returns its response. Cognito still authenticates the user, mints,
+ * and signs the tokens; this server is only the front the client talks to.
+ */
+export const OAUTH_AUTHORIZE_PATH = "/oauth/authorize";
+export const OAUTH_TOKEN_PATH = "/oauth/token";
+
+/**
  * The keyless listing preview, used only when the discovery document does not
  * state one.
  *
