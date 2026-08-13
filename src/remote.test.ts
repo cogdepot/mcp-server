@@ -224,6 +224,20 @@ describe("the OAuth gate", () => {
     expect(seen).toHaveLength(0);
   });
 
+  it("also serves the protected-resource metadata under a path suffix, which clients probe first", async () => {
+    const { handler, seen } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request(`https://mcp.cogdepot.com${OAUTH_PROTECTED_RESOURCE_PATH}/mcp`),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["resource"]).toBe(OAUTH_CONFIG.resource);
+    expect(seen).toHaveLength(0);
+  });
+
   it("passes a request with no bearer straight through as keyless", async () => {
     // The zero-config promise in OAuth mode: no token is not an error, it is an
     // anonymous caller, and the inner handler builds the keyless server (no authInfo).

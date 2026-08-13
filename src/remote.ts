@@ -191,7 +191,16 @@ export function gateWithOAuth(
     fetch: async (request: Request, options?: McpHandlerRequestOptions): Promise<Response> => {
       const url = new URL(request.url);
 
-      if (request.method === "GET" && url.pathname === OAUTH_PROTECTED_RESOURCE_PATH) {
+      // Served at the bare path AND under any path suffix. A client probing for
+      // the metadata tries /.well-known/oauth-protected-resource/<mcp-path> before
+      // the bare path (per Anthropic's connector docs), so matching the suffixed
+      // form too keeps discovery working if the server is ever mounted below root -
+      // and is harmless at root, where the suffix is empty.
+      if (
+        request.method === "GET" &&
+        (url.pathname === OAUTH_PROTECTED_RESOURCE_PATH ||
+          url.pathname.startsWith(`${OAUTH_PROTECTED_RESOURCE_PATH}/`))
+      ) {
         return jsonResponse(protectedResourceMetadata(config), 200);
       }
 
