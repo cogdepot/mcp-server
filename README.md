@@ -153,33 +153,50 @@ No telemetry, no analytics, no logging to any remote destination. Your API key
 is held in memory, sent only to `api.cogdepot.com` over HTTPS, and never written
 to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
 
-## Remote server (preview)
+## Remote server
 
-The server also runs over HTTP, not only stdio. `src/remote.ts` reuses the same
-tool-building core; the only difference is that the key travels **per request**
-in a header rather than per process in the environment. A request with no key
-still answers the keyless discovery tools, exactly as the stdio build does.
+The server also runs over HTTP, not only stdio, and is deployed that way: a
+Lambda (`src/lambda.ts`) behind API Gateway and a custom domain answers the same
+MCP protocol the stdio build does. `src/remote.ts` reuses the same tool-building
+core; the transport, and where the credential comes from, are the only
+differences. A request with no credential still answers the keyless discovery
+tools, exactly as the stdio build does.
+
+It serves in one of two modes, chosen once at startup by whether the
+`COGDEPOT_OAUTH_*` environment is set:
+
+- **Static-header** (OAuth unset): the caller's cogDepot API key travels **per
+  request** as `Authorization: Bearer <key>` or an `x-cogdepot-api-key` header -
+  one shared credential, the form a static-header connector uses.
+- **Per-user OAuth** (OAuth set): the bearer is a Cognito **access token**. The
+  server verifies it (RS256 via the pool's JWKS, checking `iss`, `client_id` and
+  `token_use` - Cognito access tokens carry no `aud`) and relays it to cogDepot,
+  whose own scope middleware re-verifies it and maps it to an account. A request
+  with no token still gets the keyless server; only a presented-but-bad token is
+  refused, with a `401` and a `WWW-Authenticate` challenge pointing at the
+  RFC 9728 protected-resource metadata.
+
+A spec-strict client expects the authorization server's endpoints to share one
+origin with its issuer, and Cognito both omits the `code_challenge_methods_supported`
+(S256) advertisement such a client checks and rejects the RFC 8707 `resource`
+indicator MCP clients send. So the OAuth mode fronts Cognito as a **same-origin
+proxy**: it serves its own protected-resource and authorization-server metadata
+(with the S256 advertisement added), and proxies `/oauth/authorize` and
+`/oauth/token` through to Cognito - stripping `resource` on the way. Cognito
+still runs the login and mints the tokens; the client only ever talks to one
+origin. See `src/oauth.ts` for the verifier and the metadata documents, all
+covered by offline tests.
+
+Run the local HTTP runner - not the deployment - with:
 
 ```bash
 COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
 ```
 
-Send the key as `Authorization: Bearer <key>` (the form a static-header connector
-uses) or an `x-cogdepot-api-key` header. This is **Phase 1**: a static-header
-connector, one shared credential, not per-user OAuth.
-
-**Phase 2 groundwork** is present but not yet wired: `src/oauth.ts` holds a
-Cognito access-token verifier (RS256 via the pool's JWKS, checking `iss`,
-`client_id` and `token_use` - Cognito access tokens carry no `aud`) and the
-RFC 9728 protected-resource-metadata document, both covered by offline tests.
-They are deliberately not on the live request path, because verifying a user's
-token only becomes useful once the cogDepot API accepts that token (Phase 3,
-API-side) - until then a verified token has no key to call the API with. The
-`apiKeyFromRequest` seam in `remote.ts` is where the two phases meet.
-
-`scripts/serve-remote.mjs` is a local runner, not the deployment; a hosted
-deployment adapts the same `fetch` handler to its target (a Lambda event, for
-example).
+`scripts/build-lambda.mjs` bundles the handler for deployment and
+`infra/sam/template.yaml` is the Lambda + API Gateway + custom-domain stack; both
+the deployment and the local runner drive the same web-standard `fetch` handler
+`createRemoteHandler` returns.
 
 ## Development
 
