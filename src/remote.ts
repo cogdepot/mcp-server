@@ -213,15 +213,23 @@ export function gateWithOAuth(
       }
 
       // Authorize: 302 the browser on to Cognito's hosted UI, forwarding the query
-      // (client_id, redirect_uri, scope, PKCE challenge, ...) untouched. The user
-      // logs in and consents there; Cognito redirects to the client's own callback.
+      // (client_id, redirect_uri, scope, PKCE challenge, ...) - but with the RFC
+      // 8707 `resource` indicator stripped. The MCP client sends `resource` to
+      // audience-bind the token, but Cognito does not implement RFC 8707; it reads
+      // `resource` as one of its own resource-server identifiers and rejects our
+      // URL with "custom scopes requested for resource-binding must be assigned to
+      // the resource being requested". Dropping it lets the scopes bind by their
+      // `cogdepot/` prefix as Cognito expects. The audience binding `resource`
+      // would carry is enforced instead by the verifier's client_id pin and by
+      // cogDepot's own scope check.
       if (request.method === "GET" && url.pathname === OAUTH_AUTHORIZE_PATH) {
         const upstream = await upstreamDiscovery();
         const authorizeEndpoint = upstream && upstreamEndpoint(upstream, "authorization_endpoint");
         if (!authorizeEndpoint) return upstreamUnreachable();
+        const forwarded = withoutResourceParam(url.search);
         return new Response(null, {
           status: 302,
-          headers: { location: `${authorizeEndpoint}${url.search}` },
+          headers: { location: forwarded ? `${authorizeEndpoint}?${forwarded}` : authorizeEndpoint },
         });
       }
 
@@ -229,7 +237,9 @@ export function gateWithOAuth(
       // endpoint and return its response verbatim. Client authentication rides
       // along as the client sent it - the Authorization header for
       // client_secret_basic, the form body for client_secret_post - and the tokens
-      // Cognito mints are returned unchanged.
+      // Cognito mints are returned unchanged. The `resource` indicator is stripped
+      // from the body for the same reason it is stripped at authorize: Cognito
+      // rejects it, and the binding it stands for is enforced elsewhere.
       if (request.method === "POST" && url.pathname === OAUTH_TOKEN_PATH) {
         const upstream = await upstreamDiscovery();
         const tokenEndpoint = upstream && upstreamEndpoint(upstream, "token_endpoint");
@@ -313,23 +323,67 @@ function jsonResponse(body: unknown, status: number): Response {
  * 400 invalid_grant from Cognito is a real answer the client must see.
  */
 async function proxyToken(tokenEndpoint: string, request: Request): Promise<Response> {
-  const headers: Record<string, string> = {
-    "content-type": request.headers.get("content-type") ?? "application/x-www-form-urlencoded",
-  };
+  const contentType = request.headers.get("content-type") ?? "application/x-www-form-urlencoded";
+  const headers: Record<string, string> = { "content-type": contentType };
   const authorization = request.headers.get("authorization");
   if (authorization) headers["authorization"] = authorization;
 
+  // Strip the RFC 8707 `resource` indicator Cognito rejects (see the authorize
+  // leg for why), but only from a form body - a non-form body is forwarded as-is.
+  const rawBody = await request.text();
+  const requestBody = contentType.includes("application/x-www-form-urlencoded")
+    ? withoutResourceParam(rawBody)
+    : rawBody;
   let upstream: Response;
   try {
-    upstream = await fetch(tokenEndpoint, { method: "POST", headers, body: await request.text() });
+    upstream = await fetch(tokenEndpoint, { method: "POST", headers, body: requestBody });
   } catch {
     return jsonResponse({ error: "server_error", error_description: "token endpoint is unreachable" }, 502);
   }
   const body = await upstream.text();
+  if (upstream.status >= 400) {
+    // The single most useful line when the flow reaches the token exchange and
+    // Cognito refuses it: its OAuth error body (never a secret - a 4xx carries no
+    // token) plus the NAMES of the form fields the client sent (values redacted,
+    // so neither the code nor the client_secret is ever written). This pinpoints a
+    // missing redirect_uri, an unsupported `resource` param, a PKCE mismatch, etc.
+    const fieldNames = tokenFieldNames(rawBody, contentType);
+    process.stderr.write(
+      `mcp: token exchange refused ${upstream.status}: ${body.replace(/[\r\n]+/g, " ").slice(0, 300)} ` +
+        `[client-auth=${authorization ? "header" : "body"}] [fields=${fieldNames}]\n`,
+    );
+  }
   return new Response(body, {
     status: upstream.status,
     headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
   });
+}
+
+/**
+ * The names (never the values) of the form fields in a token-endpoint request,
+ * for the refusal diagnostic. Values are omitted deliberately: the body carries
+ * the authorization code and, under client_secret_post, the client secret.
+ */
+function tokenFieldNames(body: string, contentType: string): string {
+  if (!contentType.includes("application/x-www-form-urlencoded")) return "(non-form body)";
+  const names = [...new URLSearchParams(body).keys()];
+  return names.length > 0 ? names.join(",") : "(none)";
+}
+
+/**
+ * A query string or form body with the RFC 8707 `resource` parameter removed.
+ *
+ * Cognito does not implement RFC 8707 resource indicators; presented with one it
+ * fails the request rather than ignoring it, so the proxy drops `resource` on both
+ * OAuth legs before forwarding. The input may carry a leading `?` (URLSearchParams
+ * tolerates it); the output never does. Every other parameter, and their order as
+ * URLSearchParams preserves it, is left untouched.
+ */
+function withoutResourceParam(search: string): string {
+  const params = new URLSearchParams(search);
+  if (!params.has("resource")) return search.replace(/^\?/, "");
+  params.delete("resource");
+  return params.toString();
 }
 
 /**

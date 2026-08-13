@@ -417,6 +417,324 @@ describe("the OAuth gate", () => {
 
     expect(res.status).toBe(502);
   });
+
+  // The reason the same-origin proxy exists at all beyond the S256 fix: Cognito does
+  // not implement RFC 8707 resource indicators, and rejects the `resource` parameter
+  // MCP clients send ("custom scopes requested for resource-binding must be assigned
+  // to the resource being requested"). The proxy strips it on both OAuth legs.
+  it("strips the RFC 8707 resource parameter from the authorize redirect, keeping the rest", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request(
+        "https://mcp.cogdepot.com/oauth/authorize?client_id=abc&resource=https%3A%2F%2Fmcp.cogdepot.com&scope=cogdepot%2Fread&code_challenge=xyz",
+      ),
+    );
+
+    expect(res.status).toBe(302);
+    const location = res.headers.get("location") ?? "";
+    expect(location).not.toContain("resource=");
+    expect(location).toContain("client_id=abc");
+    expect(location).toContain("scope=cogdepot");
+    expect(location).toContain("code_challenge=xyz");
+  });
+
+  it("strips the resource parameter from the token exchange body, keeping the code and verifier", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    let forwardedBody: string | undefined;
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      .mockImplementationOnce(async (_input, init) => {
+        forwardedBody = String(init?.body ?? "");
+        return new Response(JSON.stringify({ access_token: "tok" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      });
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code&code=c&resource=https%3A%2F%2Fmcp.cogdepot.com&code_verifier=v",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(forwardedBody).not.toContain("resource=");
+    expect(forwardedBody).toContain("grant_type=authorization_code");
+    expect(forwardedBody).toContain("code_verifier=v");
+  });
+
+  it("logs a redacted diagnostic when Cognito refuses the token exchange - names, never values", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "invalid_grant" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code&code=SECRET_CODE&client_secret=SECRET_VALUE",
+      }),
+    );
+    spy.mockRestore();
+
+    expect(res.status).toBe(400);
+    const line = writes.join("");
+    expect(line).toContain("token exchange refused 400");
+    expect(line).toContain("invalid_grant");
+    // The field NAMES are surfaced; their values - the code and the client secret -
+    // never are.
+    expect(line).toContain("grant_type,code,client_secret");
+    expect(line).not.toContain("SECRET_CODE");
+    expect(line).not.toContain("SECRET_VALUE");
+  });
+
+  it("answers 502 when the authorize upstream endpoint is unreachable", async () => {
+    // Discovery succeeds but omits the authorization_endpoint - the proxy has no
+    // Cognito endpoint to 302 to.
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ token_endpoint: "https://pool/oauth2/token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(new Request("https://mcp.cogdepot.com/oauth/authorize?client_id=abc"));
+
+    expect(res.status).toBe(502);
+  });
+
+  it("answers 502 when the Cognito discovery fetch itself throws", async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error("dns failure"));
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request(`https://mcp.cogdepot.com${OAUTH_AUTHORIZATION_SERVER_PATH}`),
+    );
+
+    expect(res.status).toBe(502);
+  });
+
+  it("forwards a non-form token body unchanged and reports it as such when refused", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    let forwardedBody: string | undefined;
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      .mockImplementationOnce(async (_input, init) => {
+        forwardedBody = String(init?.body ?? "");
+        return new Response(JSON.stringify({ error: "invalid_request" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      });
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        // A non-form content type: the body is forwarded byte-for-byte, and the
+        // diagnostic reports the shape rather than parsing fields out of it.
+        headers: { "content-type": "application/json", authorization: "Basic zzz" },
+        body: '{"grant_type":"authorization_code"}',
+      }),
+    );
+    spy.mockRestore();
+
+    expect(res.status).toBe(400);
+    expect(forwardedBody).toBe('{"grant_type":"authorization_code"}');
+    const line = writes.join("");
+    expect(line).toContain("(non-form body)");
+    expect(line).toContain("client-auth=header");
+  });
+
+  it("answers 502 when the token endpoint itself cannot be reached", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      .mockRejectedValueOnce(new Error("network down"));
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code&code=c",
+      }),
+    );
+
+    expect(res.status).toBe(502);
+  });
+
+  it("fetches Cognito discovery once per container and serves the cache thereafter", async () => {
+    const cognitoDiscovery = {
+      issuer: OAUTH_CONFIG.issuer,
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+      jwks_uri: `${OAUTH_CONFIG.issuer}/.well-known/jwks.json`,
+    };
+    // A single discovery response is offered; the second metadata request must be
+    // answered from the cache without a second fetch.
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+    const metadataUrl = `https://mcp.cogdepot.com${OAUTH_AUTHORIZATION_SERVER_PATH}`;
+
+    const first = await gated.fetch(new Request(metadataUrl));
+    const second = await gated.fetch(new Request(metadataUrl));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects authorize with no query to the bare Cognito endpoint, no trailing '?'", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(new Request("https://mcp.cogdepot.com/oauth/authorize"));
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(cognitoDiscovery.authorization_endpoint);
+  });
+
+  it("answers 502 when discovery omits the token endpoint", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ authorization_endpoint: "https://pool/oauth2/authorize" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "grant_type=authorization_code",
+      }),
+    );
+
+    expect(res.status).toBe(502);
+  });
+
+  it("refuses a non-Error verifier rejection with a generic challenge, not a thrown string", async () => {
+    const { handler } = fakeInner();
+    // A verifier that throws a bare string rather than an Error - the gate must
+    // still answer a well-formed 401 with a safe fallback detail.
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, {
+      verifyAccessToken: async () => {
+        throw "opaque non-error reason";
+      },
+    });
+
+    const res = await gated.fetch(post({ authorization: "Bearer x" }));
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate") ?? "").toContain("could not be verified");
+  });
+
+  it("defaults the token content-type and passes an empty form through, reporting '(none)'", async () => {
+    const cognitoDiscovery = {
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    };
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(cognitoDiscovery), { status: 200, headers: { "content-type": "application/json" } }),
+      )
+      // A refusal whose response carries NO content-type header (null body sets
+      // none), so the proxy's own default is exercised.
+      .mockResolvedValueOnce(new Response(null, { status: 400 }));
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write);
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    // No content-type header and no body: the proxy defaults the content-type to
+    // form-urlencoded, and the empty form reports zero field names.
+    const res = await gated.fetch(
+      new Request("https://mcp.cogdepot.com/oauth/token", { method: "POST" }),
+    );
+    spy.mockRestore();
+
+    expect(res.status).toBe(400);
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(writes.join("")).toContain("[fields=(none)]");
+  });
 });
 
 describe("createRemoteHandler with OAuth configured", () => {
