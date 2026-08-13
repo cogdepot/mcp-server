@@ -6,6 +6,7 @@ import { apiKeyFromRequest, buildServerForRequest, createRemoteHandler, gateWith
 import { resetFactsCacheForTesting } from "./facts.js";
 import { resetApiBaseUrlForTesting } from "./config.js";
 import {
+  OAUTH_AUTHORIZATION_SERVER_PATH,
   OAUTH_PROTECTED_RESOURCE_PATH,
   REMOTE_API_KEY_HEADER,
   TOOL_GET_ACCOUNT,
@@ -216,7 +217,9 @@ describe("the OAuth gate", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body["resource"]).toBe(OAUTH_CONFIG.resource);
-    expect(body["authorization_servers"]).toEqual([OAUTH_CONFIG.issuer]);
+    // This server's own resource URL, so the client fetches OUR corrected AS
+    // document rather than Cognito's.
+    expect(body["authorization_servers"]).toEqual([OAUTH_CONFIG.resource]);
     expect(body["scopes_supported"]).toEqual([...OAUTH_CONFIG.scopes]);
     expect(seen).toHaveLength(0);
   });
@@ -277,6 +280,69 @@ describe("the OAuth gate", () => {
     expect(challenge).not.toContain('"quote"');
     expect(challenge).not.toContain("\n");
   });
+
+  // The chip's rejection matrix, at the gate boundary: whatever the verifier
+  // rejects a presented token for - expiry, wrong client (Cognito's stand-in for
+  // aud), wrong issuer/signature, or an id token where an access token is required
+  // - the gate answers one uniform 401 challenge and never reaches the handler.
+  // The verifier's own reason-specific behaviour is covered in oauth.test.ts.
+  it.each([
+    "token has expired",
+    "token was issued for a different client",
+    "token signature or issuer did not verify",
+    "not an access token (token_use is not 'access')",
+  ])("refuses a token the verifier rejects (%s) with a 401 challenge", async (reason) => {
+    const { handler, seen } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error(reason)));
+
+    const res = await gated.fetch(post({ authorization: "Bearer rejected" }));
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate") ?? "").toContain('error="invalid_token"');
+    expect(seen).toHaveLength(0);
+  });
+
+  it("serves the proxied authorization-server metadata with the S256 advertisement Cognito omits", async () => {
+    // A trimmed Cognito discovery document, deliberately without
+    // code_challenge_methods_supported, as the live pool actually returns.
+    const cognitoDiscovery = {
+      issuer: OAUTH_CONFIG.issuer,
+      authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+      token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+      jwks_uri: `${OAUTH_CONFIG.issuer}/.well-known/jwks.json`,
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(cognitoDiscovery), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request(`https://mcp.cogdepot.com${OAUTH_AUTHORIZATION_SERVER_PATH}`),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["code_challenge_methods_supported"]).toEqual(["S256"]);
+    expect(body["issuer"]).toBe(OAUTH_CONFIG.resource);
+    expect(body["authorization_endpoint"]).toBe(cognitoDiscovery.authorization_endpoint);
+    expect(body["token_endpoint"]).toBe(cognitoDiscovery.token_endpoint);
+  });
+
+  it("answers 502 when the upstream Cognito discovery cannot be fetched", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response("upstream down", { status: 500 }));
+    const { handler } = fakeInner();
+    const gated = gateWithOAuth(handler, OAUTH_CONFIG, stubVerifier(new Error("unused")));
+
+    const res = await gated.fetch(
+      new Request(`https://mcp.cogdepot.com${OAUTH_AUTHORIZATION_SERVER_PATH}`),
+    );
+
+    expect(res.status).toBe(502);
+  });
 });
 
 describe("createRemoteHandler with OAuth configured", () => {
@@ -312,7 +378,7 @@ describe("createRemoteHandler with OAuth configured", () => {
       );
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
-      expect(body["authorization_servers"]).toEqual([OAUTH_ENV.COGDEPOT_OAUTH_ISSUER]);
+      expect(body["authorization_servers"]).toEqual([OAUTH_ENV.COGDEPOT_OAUTH_RESOURCE]);
     });
   });
 

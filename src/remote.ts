@@ -36,12 +36,17 @@ import {
 import { resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
 import { buildServer } from "./core.js";
 import {
+  authorizationServerMetadata,
   createCognitoVerifier,
   protectedResourceMetadata,
   resolveOAuthConfig,
   type OAuthConfig,
 } from "./oauth.js";
-import { OAUTH_PROTECTED_RESOURCE_PATH, REMOTE_API_KEY_HEADER } from "./strings.js";
+import {
+  OAUTH_AUTHORIZATION_SERVER_PATH,
+  OAUTH_PROTECTED_RESOURCE_PATH,
+  REMOTE_API_KEY_HEADER,
+} from "./strings.js";
 
 /**
  * Extracts the cogDepot API key from a request.
@@ -149,6 +154,36 @@ export function gateWithOAuth(
   config: OAuthConfig,
   verifier: AccessTokenVerifier,
 ): McpHttpHandler {
+  // Per-handler cache of the proxied authorization-server metadata. Cognito's
+  // discovery is stable within a key-rotation window and this document is fetched
+  // only at connector setup, so one fetch per container is plenty. Held in the
+  // closure rather than at module scope so each handler - and each test - starts
+  // with a clean cache. Only a successful fetch is cached, so a transient upstream
+  // failure is retried on the next request.
+  let authorizationServerCache: Record<string, unknown> | undefined;
+  const serveAuthorizationServer = async (): Promise<Response> => {
+    if (!authorizationServerCache) {
+      let upstream: Record<string, unknown>;
+      try {
+        const res = await fetch(`${config.issuer}/.well-known/openid-configuration`);
+        if (!res.ok) {
+          return jsonResponse(
+            { error: "server_error", error_description: `authorization server discovery returned ${res.status}` },
+            502,
+          );
+        }
+        upstream = (await res.json()) as Record<string, unknown>;
+      } catch {
+        return jsonResponse(
+          { error: "server_error", error_description: "authorization server discovery is unreachable" },
+          502,
+        );
+      }
+      authorizationServerCache = authorizationServerMetadata(config, upstream);
+    }
+    return jsonResponse(authorizationServerCache, 200);
+  };
+
   return {
     close: inner.close,
     notify: inner.notify,
@@ -158,6 +193,13 @@ export function gateWithOAuth(
 
       if (request.method === "GET" && url.pathname === OAUTH_PROTECTED_RESOURCE_PATH) {
         return jsonResponse(protectedResourceMetadata(config), 200);
+      }
+
+      // The proxied authorization-server metadata (Cognito's, plus the S256 PKCE
+      // advertisement it omits). Unauthenticated, like the protected-resource
+      // document above.
+      if (request.method === "GET" && url.pathname === OAUTH_AUTHORIZATION_SERVER_PATH) {
+        return serveAuthorizationServer();
       }
 
       const token = bearerFromAuthorization(request);

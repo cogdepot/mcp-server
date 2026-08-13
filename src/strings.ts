@@ -36,6 +36,19 @@ export const REMOTE_API_KEY_HEADER = "x-cogdepot-api-key";
 export const OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 
 /**
+ * The RFC 8414 authorization-server-metadata path, served by this server itself.
+ *
+ * Cognito is the real authorization server, but its OpenID discovery omits
+ * `code_challenge_methods_supported`, which a spec-strict MCP client checks before
+ * starting the PKCE flow (Cognito supports S256, it just does not advertise it).
+ * So the protected-resource metadata points `authorization_servers` at THIS server
+ * instead of the raw Cognito issuer, and this path serves a document that mirrors
+ * Cognito's own endpoints and adds the missing S256 advertisement. Tokens are
+ * still minted and signed by Cognito; only the discovery document is proxied.
+ */
+export const OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+
+/**
  * The keyless listing preview, used only when the discovery document does not
  * state one.
  *

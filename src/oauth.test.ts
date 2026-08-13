@@ -10,6 +10,7 @@ import {
 
 import {
   InvalidOAuthConfigError,
+  authorizationServerMetadata,
   createCognitoVerifier,
   protectedResourceMetadata,
   resolveOAuthConfig,
@@ -109,12 +110,51 @@ describe("resolveOAuthConfig", () => {
 });
 
 describe("protectedResourceMetadata", () => {
-  it("names the authorization server and the advertised scopes", () => {
+  it("points the client at this server's own authorization-server metadata, not Cognito directly", () => {
     const doc = protectedResourceMetadata(CONFIG);
     expect(doc["resource"]).toBe(CONFIG.resource);
-    expect(doc["authorization_servers"]).toEqual([ISSUER]);
+    // This server's resource URL, so the client fetches OUR corrected AS document
+    // rather than Cognito's, which omits the S256 PKCE advertisement.
+    expect(doc["authorization_servers"]).toEqual([CONFIG.resource]);
     expect(doc["scopes_supported"]).toEqual(CONFIG.scopes);
     expect(doc["bearer_methods_supported"]).toEqual(["header"]);
+  });
+});
+
+describe("authorizationServerMetadata", () => {
+  // A trimmed copy of a real Cognito OpenID discovery document - notably WITHOUT
+  // code_challenge_methods_supported, and with Cognito's own issuer and default
+  // scopes, which are exactly the fields this proxy has to correct.
+  const upstream = {
+    issuer: ISSUER,
+    authorization_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+    token_endpoint: "https://pool.auth.us-east-1.amazoncognito.com/oauth2/token",
+    jwks_uri: `${ISSUER}/.well-known/jwks.json`,
+    response_types_supported: ["code", "token"],
+    scopes_supported: ["openid", "email", "phone", "profile"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
+  };
+
+  it("adds the S256 advertisement Cognito omits", () => {
+    const doc = authorizationServerMetadata(CONFIG, upstream);
+    expect(doc["code_challenge_methods_supported"]).toEqual(["S256"]);
+  });
+
+  it("re-homes the issuer to this server so the document matches the URL it is served from", () => {
+    const doc = authorizationServerMetadata(CONFIG, upstream);
+    expect(doc["issuer"]).toBe(CONFIG.resource);
+  });
+
+  it("advertises the resource server's own scopes, not Cognito's defaults", () => {
+    const doc = authorizationServerMetadata(CONFIG, upstream);
+    expect(doc["scopes_supported"]).toEqual(CONFIG.scopes);
+  });
+
+  it("passes Cognito's real authorize and token endpoints through unchanged", () => {
+    const doc = authorizationServerMetadata(CONFIG, upstream);
+    expect(doc["authorization_endpoint"]).toBe(upstream.authorization_endpoint);
+    expect(doc["token_endpoint"]).toBe(upstream.token_endpoint);
+    expect(doc["jwks_uri"]).toBe(upstream.jwks_uri);
   });
 });
 

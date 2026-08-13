@@ -86,15 +86,53 @@ export function resolveOAuthConfig(values: {
  * The RFC 9728 protected-resource-metadata document.
  *
  * This is what a `401` points a client at so it can discover the authorization
- * server. `authorization_servers` names the Cognito issuer; the client resolves
- * Cognito's own discovery from there.
+ * server. `authorization_servers` names THIS server's own resource URL rather
+ * than the Cognito issuer directly, because the client next fetches that URL's
+ * authorization-server metadata, and Cognito's own discovery omits the
+ * `code_challenge_methods_supported` a spec-strict client checks before starting
+ * PKCE. This server serves a corrected copy of that document (see
+ * authorizationServerMetadata) at its own /.well-known path; Cognito still mints
+ * and signs the tokens, only the discovery document is proxied.
  */
 export function protectedResourceMetadata(config: OAuthConfig): Record<string, unknown> {
   return {
     resource: config.resource,
-    authorization_servers: [config.issuer],
+    authorization_servers: [config.resource],
     scopes_supported: [...config.scopes],
     bearer_methods_supported: ["header"],
+  };
+}
+
+/**
+ * The RFC 8414 authorization-server-metadata document this server serves on
+ * Cognito's behalf.
+ *
+ * It is Cognito's own discovery document (`upstream`, fetched from the pool's
+ * OpenID configuration) with three corrections:
+ *
+ *  - `issuer` becomes this server's resource URL, because that is the URL the
+ *    client fetched this document from and RFC 8414 requires the two to match;
+ *  - `code_challenge_methods_supported` is added as `["S256"]` - the whole reason
+ *    this proxy exists, since Cognito supports S256 PKCE but does not advertise it;
+ *  - `scopes_supported` is set to the resource server's trading scopes rather than
+ *    Cognito's default openid/email/phone/profile, so the advertised scopes are the
+ *    ones this resource actually understands.
+ *
+ * Every other field - crucially `authorization_endpoint` and `token_endpoint` -
+ * is passed through unchanged, so the client drives the real Cognito hosted-UI and
+ * token endpoints. The tokens they mint carry Cognito's own `iss`, which is what
+ * the verifier and cogDepot check; the swapped `issuer` here is only the discovery
+ * identifier the client used, which it does not reconcile against the token.
+ */
+export function authorizationServerMetadata(
+  config: OAuthConfig,
+  upstream: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...upstream,
+    issuer: config.resource,
+    scopes_supported: [...config.scopes],
+    code_challenge_methods_supported: ["S256"],
   };
 }
 
