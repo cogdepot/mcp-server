@@ -51,7 +51,12 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    # nodejs22.x, not 20: node20 reached Lambda EOL 2026-04-30. The esbuild bundle
+    # is plain ESM over the bundled AWS SDK v3 (no native addons), so it runs on 22
+    # unchanged - the runtime bump needs no code change. The live staging function
+    # in the mgmt account is intentionally left on its old runtime until the account
+    # split redeploys it from this template; this value is what that redeploy lands.
+    Runtime: nodejs22.x
     Architectures: [arm64]
     MemorySize: 256
     # A cold start reads no secrets and makes no network call until the first
