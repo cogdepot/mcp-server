@@ -60,6 +60,7 @@ const EXCLUDED = {
   "GET /robots.txt": "Not agent-facing.",
   "GET /health": "Operational, not agent-facing.",
   "GET /version": "Operational, not agent-facing.",
+  "GET /status.json": "Statuspage uptime feed (all-systems status, component history), not agent-facing.",
   "POST /a2a": "A2A JSON-RPC surface. A different protocol, not wrapped by MCP.",
 
   "POST /dashboard/credits": "Top-up. Moves money; barred from directory listing outright.",
