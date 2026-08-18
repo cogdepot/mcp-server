@@ -1,5 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        # W1030 wants CertificateArn to look like an ACM ARN. Its default is
+        # deliberately "" - the empty value IS the dormant-deploy switch, and the
+        # parameter is only read under the HasCustomDomain condition, so an empty
+        # default can never reach an ACM lookup. Without this the template lints
+        # dirty purely for supporting a dormant deploy.
+        - W1030
 Description: >
   Remote MCP server for cogDepot - a Lambda behind an HTTP API on a custom
   domain. The Lambda runs the same createRemoteHandler() the stdio build wraps;
@@ -14,16 +25,33 @@ Parameters:
 
   DomainName:
     Type: String
-    Description: Custom domain for the MCP server, e.g. staging.mcp.cogdepot.com
+    Default: ""
+    Description: >
+      Custom domain for the MCP server, e.g. staging.mcp.cogdepot.com. Empty = a
+      DORMANT deploy: no custom domain, no API mapping, no Route53 record, so the
+      stack can be stood up in a new account while another account still owns the
+      name. API Gateway custom domain names are globally unique per region, so a
+      non-dormant deploy of a name another account holds fails outright - and would
+      also repoint live DNS the moment it succeeded.
 
   CertificateArn:
     Type: String
-    Description: ACM cert ARN for DomainName (us-east-1). From the foundation Terraform's mcp_certificate_arn output.
+    Default: ""
+    Description: >
+      ACM cert ARN for DomainName (us-east-1). From the foundation Terraform's
+      mcp_certificate_arn output. Only read when DomainName is set; defaults empty so
+      a dormant deploy does not have to invent one.
 
   HostedZoneId:
     Type: String
-    Default: Z06203922NKB14MYQ8LL5
-    Description: Route53 hosted zone for cogdepot.com - same zone the API stack uses.
+    Default: Z038731330GY98JQNZMZQ
+    Description: >
+      Route53 hosted zone for cogdepot.com - same zone the API stack uses. Was
+      Z06203922NKB14MYQ8LL5, the zone in the old management account; cogdepot.com was
+      re-delegated to Z038731330GY98JQNZMZQ in account 362099376321 during the account
+      split, and the old zone is now orphaned (nothing delegates to it). Deploying
+      against the old id would create records nobody resolves, so the name would
+      silently never come up.
 
   ApiBaseUrl:
     Type: String
@@ -64,18 +92,55 @@ Globals:
     # connector allows is the tighter constraint, met by keeping the handler warm.
     Timeout: 30
 
+Conditions:
+  # Empty DomainName => dormant deploy (no domain, no mapping, no Route53).
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
+
 Resources:
   McpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: $default
-      # SAM creates the custom domain, the ACM mapping, and the Route53 alias
-      # record from this block - the same one-stop domain wiring the API stack uses.
-      Domain:
-        DomainName: !Ref DomainName
-        CertificateArn: !Ref CertificateArn
-        Route53:
-          HostedZoneId: !Ref HostedZoneId
+
+  # The custom domain, its ACM mapping and the Route53 alias were a SAM `Domain:`
+  # block on McpApi. They are spelled out as raw resources so each can carry a
+  # Condition: SAM evaluates `Domain` at transform time and rejects an !If there
+  # ("Custom Domains only works if both DomainName and CertificateArn are
+  # provided"), so the sugar cannot express a dormant deploy. Same shape as the
+  # cogDepot API stack's ApiDomainName/ApiDomainMapping/ApiDomainRecord.
+  McpDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+          EndpointType: REGIONAL
+
+  McpApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    # Stage is the literal "$default", not a !Ref, so CloudFormation sees no
+    # dependency on the SAM-generated default stage and would create the mapping in
+    # parallel with it. On a from-scratch create the mapping can win that race and
+    # fail "Invalid stage identifier" - hit for real on the cogDepot API stack's
+    # 3.11 staging create (fixed there in 9a5b837). Force the order.
+    DependsOn: McpApiApiGatewayDefaultStage
+    Properties:
+      ApiId: !Ref McpApi
+      DomainName: !Ref McpDomainName
+      Stage: $default
+
+  McpDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "${DomainName}."
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt McpDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt McpDomainName.RegionalHostedZoneId
 
   McpFunction:
     Type: AWS::Serverless::Function
@@ -109,7 +174,14 @@ Resources:
 
 Outputs:
   McpUrl:
-    Description: The public MCP server URL - what a user enters as the custom connector.
-    Value: !Sub https://${DomainName}
+    Description: >
+      The MCP server URL. With a custom domain this is what a user enters as the
+      custom connector; on a dormant deploy it falls back to the execute-api URL, which
+      is the only way to reach the stack before the name is attached. Without the
+      fallback this output is the bare string "https://".
+    Value: !If
+      - HasCustomDomain
+      - !Sub https://${DomainName}
+      - !Sub https://${McpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
   FunctionName:
     Value: !Ref McpFunction
