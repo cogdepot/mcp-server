@@ -61,5 +61,12 @@
         }
       ]
     }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.cogdepot.com",
+      "headers": []
+    }
   ]
 }

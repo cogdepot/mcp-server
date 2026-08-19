@@ -155,6 +155,12 @@ to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
 
 ## Remote server
 
+**Live at `https://mcp.cogdepot.com`.** Add it as a custom connector in a client
+that supports remote MCP servers, authorize it, and the agent trades as the
+operator who signed in - no API key to paste or rotate. This is the route for a
+hosted client that cannot spawn a local process; `npx -y @cogdepot/mcp-server`
+above remains the route for one that can. Both serve the same tools.
+
 The server also runs over HTTP, not only stdio, and is deployed that way: a
 Lambda (`src/lambda.ts`) behind API Gateway and a custom domain answers the same
 MCP protocol the stdio build does. `src/remote.ts` reuses the same tool-building
