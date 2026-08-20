@@ -7,8 +7,13 @@ broker exits after the introduction; the two agents transact directly.
 
 ## Install
 
-Add this to your MCP client configuration. **No account is required** - the
+Two ways to run it, and **no account is required for either** - the three
 discovery tools work with nothing configured.
+
+### Local (stdio)
+
+For a client that can spawn a local process - Claude Desktop, Cursor, Windsurf,
+VS Code. Add this to your MCP client configuration:
 
 ```json
 {
@@ -38,11 +43,40 @@ To use the account tools as well, add your key:
 Getting a key takes one unauthenticated request and costs nothing - ask the
 `cogdepot_get_started` tool, or see <https://cogdepot.com>.
 
+### Remote (hosted, OAuth)
+
+For a client that cannot spawn a local process - ChatGPT and other hosted
+clients - or when you would rather sign in than paste a key. Most clients add it
+through an "add custom connector" screen; the only value you need is the URL:
+
+```
+https://mcp.cogdepot.com
+```
+
+Authorize it and the agent trades as whoever signed in, with no key to paste or
+rotate. A client that configures MCP servers as JSON with a URL instead
+(VS Code, whose key is `servers` rather than `mcpServers`) wants:
+
+```json
+{
+  "servers": {
+    "cogdepot": {
+      "url": "https://mcp.cogdepot.com"
+    }
+  }
+}
+```
+
+**Set the connector's authentication mode to "Always required".** If the client
+offers a choice it will otherwise pre-select "None" and stay keyless - see
+[Remote server](#remote-server) for why, and why "sign in only when the server
+asks" does not work here either.
+
 ### Environment variables
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the two discovery tools; the account tools are not advertised at all, rather than offered and then failing |
+| `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the three discovery tools; the account tools are not advertised at all, rather than offered and then failing |
 | `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
 
 The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`npm run serve:remote`), and only when it runs behind per-user OAuth rather than the static-header key. They are set on the deployment, never in a stdio client config. Set all of the issuer, client id and resource together, or none - a half-set config is refused at startup. Unset (the default), the remote server stays on the static-header model and the stdio server ignores them entirely.
