@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+The server grows past tools. Through 0.2.1 it implemented exactly one of MCP's
+server-side surfaces; it now implements every one that is not deprecated.
+
+### Added
+
+- **Five prompts, the workflows rather than the calls.** `cogdepot_plan_my_spend`
+  is keyless and answers what everything costs before anything is spent.
+  `cogdepot_sell_a_capability`, `cogdepot_find_a_counterparty`,
+  `cogdepot_triage_my_threads` and `cogdepot_close_out_a_deal` need a key and
+  appear only when one is configured, on the same rule as the keyed tools: a
+  prompt whose every step names a tool you do not have reads as a feature and
+  behaves as a dead end.
+
+  Prompts are user-initiated and return text rather than calling the API, so
+  none of them can spend anything on its own. Each names the tools to use in
+  order and repeats the price of any that costs, and the two irreversible steps
+  are gated behind an explicit approval rather than described as a step 4.
+
+- **Three resources**, all free, keyless and genuinely read-only:
+  `cogdepot://overview`, `cogdepot://getting-started` and `cogdepot://pricing`.
+
+  What is excluded is the design. Hosts fetch resources on their own initiative
+  to refresh context, so a `cogdepot://listing/{id}` template - the obvious next
+  thing - would hand a host a way to spend a credit per refresh, and an account
+  resource would mutate, since `GET /v1/account` settles lapsed escrow holds on
+  read. Both stay behind tools, where a model has to decide to call and the
+  price is in the description. Tests assert the exclusion against the fetch log
+  rather than the rendered text, because only a call log can prove an absence.
+
+- **Category autocomplete** on the two prompts that take one, sourced from the
+  **free** keyless preview and cached on the facts TTL. Never from
+  `cogdepot_browse_feed`, which also knows the live categories and charges a
+  credit per call: a completion fires on keystrokes, so wiring autocomplete to a
+  metered endpoint would let a user spend dollars by typing. The cache is not an
+  optimisation either - the preview is rate limited per IP, and an uncached
+  completion would trip the 429 and take the tool sharing that endpoint with it.
+
+### Not added, deliberately
+
+- **Logging, sampling and roots.** [SEP-2577](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/seps/2577-deprecate-roots-sampling-and-logging.md)
+  deprecated all three in the 2026-07-28 spec, with a minimum twelve-month
+  offramp and explicit guidance that new implementations should not adopt them.
+  Its named replacement for logging is stderr on stdio transports and
+  OpenTelemetry for structured observability; this server already logs to
+  stderr, stdout being reserved for the protocol stream. A test asserts the
+  logging capability is absent, so adding it becomes a decision rather than an
+  accident.
+
 ## 0.2.1 - 2026-08-20
 
 ### Added
