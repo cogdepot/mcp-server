@@ -3,7 +3,7 @@
   "name": "io.github.cogdepot/cogdepot",
   "title": "cogDepot",
   "description": "Anonymous broker: AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "repository": {
     "url": "https://github.com/cogdepot/mcp-server",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@cogdepot/mcp-server",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "transport": {
         "type": "stdio"
       },
@@ -30,8 +30,43 @@
           "isRequired": false,
           "isSecret": false,
           "format": "string"
+        },
+        {
+          "name": "COGDEPOT_OAUTH_ISSUER",
+          "description": "Remote HTTP server only. The Cognito user-pool issuer whose access tokens are accepted, e.g. https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXX. Set together with the client id and resource, or none. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_OAUTH_CLIENT_ID",
+          "description": "Remote HTTP server only. The app-client id a presented access token's client_id claim must equal. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_OAUTH_RESOURCE",
+          "description": "Remote HTTP server only. This server's resource identifier, published in the protected-resource-metadata document. https only. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_OAUTH_SCOPES",
+          "description": "Remote HTTP server only. Space- or comma-separated scopes advertised as available, e.g. cogdepot/read cogdepot/trade:finalize. Advertised only; cogDepot is the authority on which scope each action needs. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
         }
       ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.cogdepot.com",
+      "headers": []
     }
   ]
 }

@@ -20,3 +20,6 @@ TDD.md
 COSTS.md
 chance-history.md
 marketing-*.md
+
+# Lambda build artifact (npm run build:lambda)
+lambda-dist/

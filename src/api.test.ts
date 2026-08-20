@@ -342,6 +342,45 @@ describe("CogDepotClient", () => {
     expect((init.headers as Record<string, string>)["x-api-key"]).toBe("secret");
   });
 
+  it("sends a bearer credential as Authorization: Bearer, not x-api-key", async () => {
+    // The relay path: a verified Cognito access token is presented to cogDepot as
+    // a Bearer, which its scope middleware re-verifies. The API key header must be
+    // absent so the two credentials are never sent at once.
+    const fetchImpl = vi.fn().mockResolvedValue(response({ ok: true }));
+    const client = new CogDepotClient(
+      { kind: "bearer", value: "access-token-xyz" },
+      "https://api.example.com",
+      fetchImpl as never,
+    );
+
+    await client.request("/v1/account");
+
+    const headers = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers["authorization"]).toBe("Bearer access-token-xyz");
+    expect(headers["x-api-key"]).toBeUndefined();
+  });
+
+  it("sends an explicit api-key credential as x-api-key, like the bare-string form", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(response({ ok: true }));
+    const client = new CogDepotClient(
+      { kind: "api-key", value: "secret" },
+      "https://api.example.com",
+      fetchImpl as never,
+    );
+
+    await client.request("/v1/account");
+
+    const headers = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers["x-api-key"]).toBe("secret");
+    expect(headers["authorization"]).toBeUndefined();
+  });
+
+  it("treats a blank bearer value as no credential, not an empty header", async () => {
+    const client = new CogDepotClient({ kind: "bearer", value: "   " });
+    expect(client.hasKey).toBe(false);
+    await expect(client.request("/v1/account")).rejects.toBeInstanceOf(MissingApiKeyError);
+  });
+
   it("returns undefined for 204 instead of failing to parse an empty body", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(response(null, 204));
     const client = new CogDepotClient("k", "https://api.example.com", fetchImpl as never);

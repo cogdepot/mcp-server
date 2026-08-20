@@ -12,6 +12,21 @@ import { getFacts } from "./facts.js";
 import { getApiBaseUrl } from "./config.js";
 import { REQUEST_TIMEOUT_MS } from "./strings.js";
 
+/**
+ * How the client authenticates to cogDepot.
+ *
+ * Two shapes because the remote transport carries two kinds of credential to the
+ * same API. An `api-key` is the account's own key, sent as `x-api-key` exactly as
+ * it always was - the stdio build and the Phase 1 static-header connector both
+ * produce this. A `bearer` is a verified Cognito access token relayed straight
+ * through as `Authorization: Bearer`: cogDepot's own scope middleware re-verifies
+ * it and resolves the account, so the MCP server presents the user's token rather
+ * than exchanging it for a key it does not hold.
+ */
+export type Credential =
+  | { readonly kind: "api-key"; readonly value: string }
+  | { readonly kind: "bearer"; readonly value: string };
+
 export interface RequestOptions {
   readonly method?: "GET" | "POST" | "PUT";
   readonly body?: unknown;
@@ -39,6 +54,24 @@ export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Coerces the constructor's credential argument into a Credential or undefined.
+ *
+ * A bare string is an API key, preserving every existing caller. A blank value -
+ * empty or whitespace-only, in either shape - is no credential rather than a
+ * credential that is empty, so the keyless server answers instead of the API
+ * rejecting a request that carries an empty header.
+ */
+function normalizeCredential(credential: string | Credential | undefined): Credential | undefined {
+  if (credential === undefined) return undefined;
+  if (typeof credential === "string") {
+    const value = credential.trim();
+    return value ? { kind: "api-key", value } : undefined;
+  }
+  const value = credential.value.trim();
+  return value ? { kind: credential.kind, value } : undefined;
+}
+
 /** Thrown when a tool needing a key is invoked without one configured. */
 export class MissingApiKeyError extends Error {
   override readonly name = "MissingApiKeyError";
@@ -52,18 +85,27 @@ export class MissingApiKeyError extends Error {
 }
 
 export class CogDepotClient {
-  readonly #apiKey: string | undefined;
+  readonly #credential: Credential | undefined;
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
 
-  constructor(apiKey?: string, baseUrl: string = getApiBaseUrl(), fetchImpl: typeof fetch = fetch) {
-    this.#apiKey = apiKey?.trim() || undefined;
+  /**
+   * A bare string first argument is an API key, so every existing
+   * `new CogDepotClient(key)` caller is unchanged. A Credential selects the
+   * header explicitly - the remote OAuth path passes a `bearer`.
+   */
+  constructor(
+    credential?: string | Credential,
+    baseUrl: string = getApiBaseUrl(),
+    fetchImpl: typeof fetch = fetch,
+  ) {
+    this.#credential = normalizeCredential(credential);
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
     this.#fetch = fetchImpl;
   }
 
   get hasKey(): boolean {
-    return this.#apiKey !== undefined;
+    return this.#credential !== undefined;
   }
 
   /**
@@ -74,13 +116,18 @@ export class CogDepotClient {
    * an error.
    */
   async request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T | undefined> {
-    if (!this.#apiKey) throw new MissingApiKeyError();
+    if (!this.#credential) throw new MissingApiKeyError();
 
     const method = options.method ?? "GET";
-    const headers: Record<string, string> = {
-      "x-api-key": this.#apiKey,
-      accept: "application/json",
-    };
+    const headers: Record<string, string> = { accept: "application/json" };
+    // The one place the two credential kinds diverge: an API key travels in
+    // x-api-key, a relayed Cognito access token in Authorization: Bearer. Both
+    // resolve to an account on the cogDepot side.
+    if (this.#credential.kind === "bearer") {
+      headers["authorization"] = `Bearer ${this.#credential.value}`;
+    } else {
+      headers["x-api-key"] = this.#credential.value;
+    }
     if (options.body !== undefined) headers["content-type"] = "application/json";
     if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
 

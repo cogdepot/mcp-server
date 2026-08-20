@@ -45,6 +45,15 @@ Getting a key takes one unauthenticated request and costs nothing - ask the
 | `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the two discovery tools; the account tools are not advertised at all, rather than offered and then failing |
 | `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
 
+The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`npm run serve:remote`), and only when it runs behind per-user OAuth rather than the static-header key. They are set on the deployment, never in a stdio client config. Set all of the issuer, client id and resource together, or none - a half-set config is refused at startup. Unset (the default), the remote server stays on the static-header model and the stdio server ignores them entirely.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `COGDEPOT_OAUTH_ISSUER` | no | The Cognito user-pool issuer whose access tokens the remote server accepts, e.g. `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXX`. https only |
+| `COGDEPOT_OAUTH_CLIENT_ID` | no | The app-client id a presented token's `client_id` claim must equal - the binding that stands in for the absent `aud` on a Cognito access token |
+| `COGDEPOT_OAUTH_RESOURCE` | no | This server's own resource identifier, published in the protected-resource-metadata document a `401` points clients at. https only |
+| `COGDEPOT_OAUTH_SCOPES` | no | Space- or comma-separated scopes advertised as available, e.g. `cogdepot/read cogdepot/trade:finalize`. Advertised only; cogDepot itself is the authority on which scope each action requires |
+
 ## Tools
 
 Without a key:
@@ -143,6 +152,57 @@ still running the affected version before a fix exists. See
 No telemetry, no analytics, no logging to any remote destination. Your API key
 is held in memory, sent only to `api.cogdepot.com` over HTTPS, and never written
 to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
+
+## Remote server
+
+**Live at `https://mcp.cogdepot.com`.** Add it as a custom connector in a client
+that supports remote MCP servers, authorize it, and the agent trades as the
+operator who signed in - no API key to paste or rotate. This is the route for a
+hosted client that cannot spawn a local process; `npx -y @cogdepot/mcp-server`
+above remains the route for one that can. Both serve the same tools.
+
+The server also runs over HTTP, not only stdio, and is deployed that way: a
+Lambda (`src/lambda.ts`) behind API Gateway and a custom domain answers the same
+MCP protocol the stdio build does. `src/remote.ts` reuses the same tool-building
+core; the transport, and where the credential comes from, are the only
+differences. A request with no credential still answers the keyless discovery
+tools, exactly as the stdio build does.
+
+It serves in one of two modes, chosen once at startup by whether the
+`COGDEPOT_OAUTH_*` environment is set:
+
+- **Static-header** (OAuth unset): the caller's cogDepot API key travels **per
+  request** as `Authorization: Bearer <key>` or an `x-cogdepot-api-key` header -
+  one shared credential, the form a static-header connector uses.
+- **Per-user OAuth** (OAuth set): the bearer is a Cognito **access token**. The
+  server verifies it (RS256 via the pool's JWKS, checking `iss`, `client_id` and
+  `token_use` - Cognito access tokens carry no `aud`) and relays it to cogDepot,
+  whose own scope middleware re-verifies it and maps it to an account. A request
+  with no token still gets the keyless server; only a presented-but-bad token is
+  refused, with a `401` and a `WWW-Authenticate` challenge pointing at the
+  RFC 9728 protected-resource metadata.
+
+A spec-strict client expects the authorization server's endpoints to share one
+origin with its issuer, and Cognito both omits the `code_challenge_methods_supported`
+(S256) advertisement such a client checks and rejects the RFC 8707 `resource`
+indicator MCP clients send. So the OAuth mode fronts Cognito as a **same-origin
+proxy**: it serves its own protected-resource and authorization-server metadata
+(with the S256 advertisement added), and proxies `/oauth/authorize` and
+`/oauth/token` through to Cognito - stripping `resource` on the way. Cognito
+still runs the login and mints the tokens; the client only ever talks to one
+origin. See `src/oauth.ts` for the verifier and the metadata documents, all
+covered by offline tests.
+
+Run the local HTTP runner - not the deployment - with:
+
+```bash
+COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
+```
+
+`scripts/build-lambda.mjs` bundles the handler for deployment and
+`infra/sam/template.yaml` is the Lambda + API Gateway + custom-domain stack; both
+the deployment and the local runner drive the same web-standard `fetch` handler
+`createRemoteHandler` returns.
 
 ## Development
 

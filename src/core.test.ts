@@ -3,16 +3,24 @@ import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 
 import { buildServer } from "./core.js";
+import type { Credential } from "./client.js";
 import { resetFactsCacheForTesting } from "./facts.js";
-import { TOOL_DISCOVER, TOOL_GET_STARTED, TOOL_PREVIEW_LISTINGS } from "./strings.js";
+import {
+  TOOL_DISCOVER,
+  TOOL_GET_ACCOUNT,
+  TOOL_GET_STARTED,
+  TOOL_PREVIEW_LISTINGS,
+} from "./strings.js";
 
 /**
  * Connects a real client to a real server over an in-memory pair. This is the
- * cheap counterpart to scripts/smoke.mjs: same protocol, no child process.
+ * cheap counterpart to scripts/smoke.mjs: same protocol, no child process. The
+ * optional credential drives the keyed tool set - a bare string is an API key, a
+ * Credential can also be the relayed bearer the OAuth path builds with.
  */
-async function connect() {
+async function connect(credential?: string | Credential) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = buildServer();
+  const server = buildServer(credential);
   const client = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return { client, close: () => client.close() };
@@ -45,6 +53,18 @@ describe("tool surface", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       [TOOL_DISCOVER, TOOL_GET_STARTED, TOOL_PREVIEW_LISTINGS].sort(),
     );
+    await close();
+  });
+
+  it("registers the keyed tools when a bearer credential is relayed, like an api key", async () => {
+    // The OAuth relay path: buildServer is handed a bearer (a verified access
+    // token) instead of an api key, and the keyed tool set must be identical -
+    // both resolve to an account on the cogDepot side.
+    const { client, close } = await connect({ kind: "bearer", value: "an-access-token" });
+    const names = (await client.listTools()).tools.map((t) => t.name);
+
+    expect(names).toContain(TOOL_DISCOVER);
+    expect(names).toContain(TOOL_GET_ACCOUNT);
     await close();
   });
 

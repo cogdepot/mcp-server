@@ -8,10 +8,60 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.2.0";
+export const SERVER_VERSION = "0.2.1";
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
+
+/**
+ * The request header the remote transport reads a cogDepot API key from.
+ *
+ * Phase 1 of the remote server (see remote.ts) is a static-header connector: the
+ * key travels per request rather than per process. This is the fallback header;
+ * `Authorization: Bearer <key>` is also accepted, which is the form Claude's
+ * static-header connector sends. In Phase 2 the Authorization bearer becomes an
+ * OAuth token to verify rather than a raw key.
+ */
+export const REMOTE_API_KEY_HEADER = "x-cogdepot-api-key";
+
+/**
+ * The RFC 9728 protected-resource-metadata path.
+ *
+ * When the remote server runs with OAuth configured, a GET here returns the
+ * document that names the Cognito authorization server, and a 401 challenge
+ * points a client at the same path via `WWW-Authenticate: resource_metadata=`.
+ * With OAuth unconfigured the route does not exist - the Phase 1 static-header
+ * transport advertises no authorization server.
+ */
+export const OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
+
+/**
+ * The RFC 8414 authorization-server-metadata path, served by this server itself.
+ *
+ * Cognito is the real authorization server, but its OpenID discovery omits
+ * `code_challenge_methods_supported`, which a spec-strict MCP client checks before
+ * starting the PKCE flow (Cognito supports S256, it just does not advertise it).
+ * So the protected-resource metadata points `authorization_servers` at THIS server
+ * instead of the raw Cognito issuer, and this path serves a document that mirrors
+ * Cognito's own endpoints and adds the missing S256 advertisement. Tokens are
+ * still minted and signed by Cognito; only the discovery document is proxied.
+ */
+export const OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+
+/**
+ * The authorize and token endpoints this server exposes and proxies to Cognito.
+ *
+ * The authorization-server metadata names the backing endpoints, and a strict
+ * client expects them to sit on the same origin as the issuer it just read. So
+ * rather than pointing the client straight at Cognito's *.amazoncognito.com host
+ * (a cross-origin the client rejects right after reading the metadata), the
+ * metadata names these two paths on this server: `/oauth/authorize` 302-redirects
+ * the browser on to Cognito, and `/oauth/token` forwards the code exchange to
+ * Cognito and returns its response. Cognito still authenticates the user, mints,
+ * and signs the tokens; this server is only the front the client talks to.
+ */
+export const OAUTH_AUTHORIZE_PATH = "/oauth/authorize";
+export const OAUTH_TOKEN_PATH = "/oauth/token";
 
 /**
  * The keyless listing preview, used only when the discovery document does not
