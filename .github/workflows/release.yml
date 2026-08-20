@@ -43,28 +43,37 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Ancestry, not SHA equality. `gh pr merge --merge` creates a merge
+          # commit, so main is never the same SHA as develop even immediately
+          # after a successful promotion, and the old equality check therefore
+          # never fired. That broke this workflow's own documented "leave the
+          # version blank to merge without tagging" path: the follow-up run
+          # supplying the version found nothing to promote, `gh pr create`
+          # exited non-zero with "No commits between", and `set -e` killed the
+          # job before the tag step it was run for. Whether develop is already
+          # contained in main is the question that was always meant.
           if git rev-parse --verify origin/main >/dev/null 2>&1 \
-             && [ "$(git rev-parse origin/develop)" = "$(git rev-parse origin/main)" ]; then
-            echo "main is already at develop. Nothing to promote."
-            exit 0
-          fi
+             && git merge-base --is-ancestor origin/develop origin/main; then
+            echo "main already contains develop. Nothing to promote."
+          else
 
-          # Reuse an open promotion PR rather than stacking duplicates.
-          PR=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-          if [ -z "$PR" ]; then
-            # gh pr create has no --json flag; it prints the PR URL. Take the
-            # number off the end rather than inventing a flag that does not exist.
-            PR_URL=$(gh pr create --base main --head develop \
-                       --title "release: promote develop to main" \
-                       --body "Automated promotion. Merged by the release app so the public trail is not a personal account.")
-            PR=${PR_URL##*/}
-          fi
-          echo "promotion PR: #$PR"
+            # Reuse an open promotion PR rather than stacking duplicates.
+            PR=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+            if [ -z "$PR" ]; then
+              # gh pr create has no --json flag; it prints the PR URL. Take the
+              # number off the end rather than inventing a flag that does not exist.
+              PR_URL=$(gh pr create --base main --head develop \
+                         --title "release: promote develop to main" \
+                         --body "Automated promotion. Merged by the release app so the public trail is not a personal account.")
+              PR=${PR_URL##*/}
+            fi
+            echo "promotion PR: #$PR"
 
-          # --merge, not --squash: squashing rewrites authorship onto the merger
-          # and would put the bot's identity on every commit, defeating the
-          # authorship check and losing the akashy attribution in history.
-          gh pr merge "$PR" --merge --delete-branch=false
+            # --merge, not --squash: squashing rewrites authorship onto the merger
+            # and would put the bot's identity on every commit, defeating the
+            # authorship check and losing the akashy attribution in history.
+            gh pr merge "$PR" --merge --delete-branch=false
+          fi
 
       - name: Tag the release
         if: inputs.version != ''
