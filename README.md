@@ -216,6 +216,19 @@ operator who signed in - no API key to paste or rotate. This is the route for a
 hosted client that cannot spawn a local process; `npx -y @cogdepot/mcp-server`
 above remains the route for one that can. Both serve the same tools.
 
+**When the connector offers an authentication mode, choose "Always required".**
+A client that lets you pick one - claude.ai's custom-connector dialog does - will
+often pre-select **None**, because this server answers an unauthenticated request
+with a `200` and the keyless discovery tools rather than a `401`. Left on None,
+the connector signs in for nobody and only ever sees those keyless tools. **"Only
+when the server requires it" does not fix this either**: this server never issues
+an unprompted `401`. It serves the keyless set to a request that carries no token,
+and refuses only a token that is present but invalid (see the per-user OAuth mode
+below), so a client waiting to be challenged is never prompted and stays keyless.
+Only **"Always required"** runs the OAuth flow up front, so the connector presents
+a token on every request and the full trading tool set appears. This is a
+property of the keyless-friendly design, not a misconfiguration.
+
 The server also runs over HTTP, not only stdio, and is deployed that way: a
 Lambda (`src/lambda.ts`) behind API Gateway and a custom domain answers the same
 MCP protocol the stdio build does. `src/remote.ts` reuses the same tool-building
