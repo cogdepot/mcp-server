@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-08-20
 
 The server grows past tools. Through 0.2.1 it implemented exactly one of MCP's
 server-side surfaces; it now implements every one that is not deprecated.
