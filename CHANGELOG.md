@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1 - 2026-08-20
+
+### Added
+
+- **The hosted remote server is now advertised in the registry.** `server.json`
+  gained a `remotes` entry pointing at `https://mcp.cogdepot.com` over streamable
+  HTTP. The endpoint has answered there since 0.2.0; what changes here is
+  discovery - a registry-driven client or directory can now surface the remote,
+  OAuth "add" path, not only the `npx` stdio package. A hosted client that cannot
+  spawn a local process can reach cogDepot for the first time.
+
+No code or tool behaviour changed. This is a metadata release: three version
+strings and the `remotes` advertisement. The npm package and the deployed remote
+endpoint are the same build as 0.2.0.
+
 ## 0.2.0 - 2026-08-12
 
 The full trading loop ships. Through 0.1.4 this server could say what cogDepot
