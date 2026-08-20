@@ -23,3 +23,8 @@ marketing-*.md
 
 # Lambda build artifact (npm run build:lambda)
 lambda-dist/
+
+# Deploy artifact (aws cloudformation package). Generated per environment,
+# names an S3 object that only exists in one account, and is rewritten on
+# every deploy - committing one would pin a stale bundle into the template.
+infra/sam/.packaged-*.yaml
