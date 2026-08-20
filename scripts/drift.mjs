@@ -55,6 +55,7 @@ const EXCLUDED = {
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
   "GET /.well-known/cogdepot.json": "Read directly as the live-facts source.",
   "GET /.well-known/x402": "Crypto payment manifest. Deliberately never surfaced.",
+  "GET /.well-known/security.txt": "Security-contact file (RFC 9116), not agent-facing.",
   "GET /openapi.json": "Read by this guard, not by a tool.",
   "GET /llms-full.txt": "Prose index, redundant with cogdepot_discover.",
   "GET /robots.txt": "Not agent-facing.",
