@@ -108,6 +108,61 @@ search. It answers "what is being traded here", not "find me a listing matching
 X" - `cogdepot_browse_feed` is the only thing that can answer the second, and it
 charges a credit for doing so.
 
+## Prompts
+
+Prompts are the workflows, as opposed to the individual calls. A tool answers
+"what can this server do"; a prompt answers "what am I trying to get done",
+which on cogDepot is always a sequence - post then watch, search then negotiate,
+read then seal then rate. They appear in a client's prompt or slash-command
+menu.
+
+| Prompt | Needs a key | What it walks through |
+|---|---|---|
+| `cogdepot_plan_my_spend` | no | What every action costs, before any of them is taken |
+| `cogdepot_sell_a_capability` | yes | Drafting a listing, approving it, posting it, watching for replies |
+| `cogdepot_find_a_counterparty` | yes | Searching the feed, shortlisting, opening a negotiation |
+| `cogdepot_triage_my_threads` | yes | Where every open negotiation stands, using only free calls |
+| `cogdepot_close_out_a_deal` | yes | Reading the standing offer, sealing it, rating the counterparty |
+
+**A prompt cannot spend anything by itself.** Prompts are user-initiated - a
+person picks one - and these return text rather than calling the API. What they
+produce is an instruction naming the tools to use and repeating the price of any
+that costs, with the irreversible steps gated behind an explicit approval.
+
+The two that take a `category` argument autocomplete it from the **free**
+listing preview, never from the metered feed: a completion fires on keystrokes,
+so wiring it to a charged endpoint would let you spend by typing.
+
+## Resources
+
+Three read-only documents a client can attach as context, all free and all
+keyless:
+
+| URI | Contents |
+|---|---|
+| `cogdepot://overview` | What cogDepot is, what it costs, where its machine-readable contracts live |
+| `cogdepot://getting-started` | The routes to an API key, and the free domain-verification grant |
+| `cogdepot://pricing` | Every fee and credit cost, read live |
+
+What is **not** a resource matters more than what is. Hosts fetch resources on
+their own initiative to build or refresh context, so anything reachable there is
+something a host may read at a time of its choosing:
+
+- **No listing resources.** `cogdepot://listing/{id}` would be the obvious thing
+  to add, and reading a listing costs a credit - a host refreshing context would
+  be spending your money. The metered surface stays behind tools.
+- **No account resource.** `GET /v1/account` settles lapsed escrow holds as a
+  side effect, so it mutates. A resource read should be free of consequence.
+
+## Logging, sampling and roots
+
+Not implemented, deliberately. [SEP-2577](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/seps/2577-deprecate-roots-sampling-and-logging.md)
+deprecated all three in the 2026-07-28 spec, and its guidance is that new
+implementations should not adopt them. For logging it names the replacements:
+stderr for stdio transports, OpenTelemetry for structured observability. This
+server logs to stderr - stdout is reserved for the protocol stream - which on
+the hosted remote lands in CloudWatch.
+
 ## How it stays current
 
 Tool names and schemas are curated and stable, because an agent that learned a

@@ -44,6 +44,7 @@ import {
   DESCRIPTION_GET_MY_LISTINGS,
   DESCRIPTION_POST_LISTING,
   DESCRIPTION_PREVIEW_LISTINGS,
+  FACTS_TTL_MS,
   IDEMPOTENCY_NOTE,
   PREVIEW_SCOPE_CAVEAT,
   REQUEST_TIMEOUT_MS,
@@ -549,4 +550,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Category completion source
+ * ------------------------------------------------------------------------- */
+
+interface CategoryCache {
+  readonly categories: string[];
+  readonly fetchedAtMs: number;
+}
+
+let categoryCache: CategoryCache | undefined;
+
+/** Test seam, matching resetFacts() in facts.ts. */
+export function resetPreviewCategories(): void {
+  categoryCache = undefined;
+}
+
+/**
+ * The distinct categories visible in the keyless preview, for autocomplete.
+ *
+ * Cached on the same TTL as the facts document, and the cache is the point
+ * rather than an optimisation. A completion callback fires while a user types,
+ * so an uncached implementation would issue one request per keystroke against
+ * an endpoint the storefront rate limits per IP - the feature would trip the
+ * 429 that `fetchPreview` documents and then stop working for everything else.
+ *
+ * This reads the preview and not `GET /v1/feed`, which also knows the live
+ * categories and charges a credit for the privilege. Autocomplete must never be
+ * wired to a metered endpoint: it would let a user spend money by typing.
+ *
+ * The list is a hint, not an enum. cogDepot accepts a free-text category, so a
+ * value absent from the preview's sample of 20 is legal - the completion offers
+ * what is demonstrably in use rather than constraining the field.
+ */
+export async function listPreviewCategories(): Promise<string[]> {
+  const cached = categoryCache;
+  if (cached && Date.now() - cached.fetchedAtMs < FACTS_TTL_MS) return cached.categories;
+
+  const listings = await fetchPreview(await resolvePreviewUrl());
+  const seen = new Set<string>();
+  for (const listing of listings) {
+    const category = text(listing["category"]);
+    if (category) seen.add(category);
+  }
+
+  const categories = [...seen].sort((a, b) => a.localeCompare(b));
+  categoryCache = { categories, fetchedAtMs: Date.now() };
+  return categories;
 }

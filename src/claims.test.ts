@@ -46,6 +46,19 @@ function environmentVariablesRead(): string[] {
 
 /** Tool names the server actually registers, read over the protocol. */
 async function registeredToolNames(): Promise<string[]> {
+  return (await registeredNames()).tools;
+}
+
+/**
+ * Every `cogdepot_`-prefixed name the server registers, by surface.
+ *
+ * Prompts share the tools' prefix deliberately - clients differ on whether they
+ * group a server's prompts under its name or flatten them into one list, and the
+ * prefix is the only form that reads correctly in both. The consequence is that
+ * the README guard cannot assume a `cogdepot_x` mention is a tool, so it checks
+ * against the union and the "registered but undocumented" check runs per surface.
+ */
+async function registeredNames(): Promise<{ tools: string[]; prompts: string[] }> {
   const { Client } = await import("@modelcontextprotocol/client");
   const { InMemoryTransport } = await import("@modelcontextprotocol/server");
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -55,8 +68,12 @@ async function registeredToolNames(): Promise<string[]> {
     client.connect(clientTransport),
   ]);
   const { tools } = await client.listTools();
+  const { prompts } = await client.listPrompts();
   await client.close();
-  return tools.map((t) => t.name).sort();
+  return {
+    tools: tools.map((t) => t.name).sort(),
+    prompts: prompts.map((p) => p.name).sort(),
+  };
 }
 
 describe("environment variables", () => {
@@ -135,11 +152,21 @@ describe("the README lists the tools that exist", () => {
     }
   });
 
-  it("does not advertise a tool that is not registered", async () => {
-    const registered = new Set(await registeredToolNames());
+  it("does not advertise a tool or prompt that is not registered", async () => {
+    const { tools, prompts } = await registeredNames();
+    const registered = new Set([...tools, ...prompts]);
     const mentioned = [...README.matchAll(/`(cogdepot_[a-z_]+)`/g)].map((m) => m[1] as string);
     for (const name of new Set(mentioned)) {
       expect(registered.has(name), `${name} is in the README but not registered`).toBe(true);
+    }
+  });
+
+  it("lists every prompt the server registers", async () => {
+    // The same trap the tool list already guards, one surface over: a prompt
+    // added without a README row is a feature nobody can find, and one removed
+    // without deleting the row is a promise the server no longer keeps.
+    for (const name of (await registeredNames()).prompts) {
+      expect(README, `${name} is registered but absent from the README`).toContain(name);
     }
   });
 });

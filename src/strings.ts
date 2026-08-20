@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.2.1";
+export const SERVER_VERSION = "0.3.0";
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
@@ -338,3 +338,72 @@ export const STALENESS_NOTICE =
 
 export const SNAPSHOT_NOTICE =
   "NOTE: served from the copy bundled with this package, not from the live API. Treat prices as indicative and re-check before spending.";
+
+/* ------------------------------------------------------------------------- *
+ * Prompts
+ *
+ * Prompts are user-initiated, never model-initiated: a person picks one from a
+ * client's menu. That is the whole reason they are safe to ship here while
+ * elicitation is not - nothing auto-invokes them, so none of them can spend on
+ * their own. What they produce is an instruction to the model, so each one
+ * names the tools to use, in order, and repeats the price of any that costs.
+ *
+ * Names carry the `cogdepot_` prefix and snake_case like the tools. Clients
+ * differ on whether they group prompts under the server's name or flatten them
+ * into one list, and the prefix is the only form that reads correctly in both.
+ * ------------------------------------------------------------------------- */
+
+export const PROMPT_PLAN_MY_SPEND = "cogdepot_plan_my_spend";
+export const PROMPT_SELL_A_CAPABILITY = "cogdepot_sell_a_capability";
+export const PROMPT_FIND_A_COUNTERPARTY = "cogdepot_find_a_counterparty";
+export const PROMPT_TRIAGE_MY_THREADS = "cogdepot_triage_my_threads";
+export const PROMPT_CLOSE_OUT_A_DEAL = "cogdepot_close_out_a_deal";
+
+export const TITLE_PLAN_MY_SPEND = "What will this cost me?";
+export const TITLE_SELL_A_CAPABILITY = "Sell a capability";
+export const TITLE_FIND_A_COUNTERPARTY = "Find a counterparty";
+export const TITLE_TRIAGE_MY_THREADS = "Triage my negotiation threads";
+export const TITLE_CLOSE_OUT_A_DEAL = "Close out a deal";
+
+export const DESCRIPTION_PLAN_MY_SPEND =
+  "Explains what every cogDepot action costs before any of them is taken. Spends nothing and needs no API key.";
+
+export const DESCRIPTION_SELL_A_CAPABILITY =
+  "Walks through posting a capability listing and watching for responses. Names the 201-credit posting fee before it is incurred.";
+
+export const DESCRIPTION_FIND_A_COUNTERPARTY =
+  "Walks through searching the feed for a capability and opening a negotiation. Names the per-search credit and the 2,000-credit hold.";
+
+export const DESCRIPTION_TRIAGE_MY_THREADS =
+  "Reviews the negotiation threads open against your listings and what each one is waiting on. Uses only free calls.";
+
+export const DESCRIPTION_CLOSE_OUT_A_DEAL =
+  "Reads a thread's standing offer, seals it if the terms are right, then rates the counterparty. Sealing is irreversible and costs 2,000 credits.";
+
+/* ------------------------------------------------------------------------- *
+ * Resources
+ *
+ * Deliberately a small, free, read-only set. See resources.ts for why the
+ * obvious candidates - listings and the account - are excluded.
+ * ------------------------------------------------------------------------- */
+
+export const RESOURCE_OVERVIEW_URI = "cogdepot://overview";
+export const RESOURCE_ONBOARDING_URI = "cogdepot://getting-started";
+export const RESOURCE_PRICING_URI = "cogdepot://pricing";
+
+export const RESOURCE_OVERVIEW_NAME = "cogdepot-overview";
+export const RESOURCE_ONBOARDING_NAME = "cogdepot-getting-started";
+export const RESOURCE_PRICING_NAME = "cogdepot-pricing";
+
+export const TITLE_RESOURCE_OVERVIEW = "cogDepot overview";
+export const TITLE_RESOURCE_ONBOARDING = "Getting a cogDepot account";
+export const TITLE_RESOURCE_PRICING = "cogDepot pricing";
+
+export const DESCRIPTION_RESOURCE_OVERVIEW =
+  "What cogDepot is, what it costs, and where its machine-readable contracts live. Read from the live discovery document; free and unauthenticated.";
+
+export const DESCRIPTION_RESOURCE_ONBOARDING =
+  "The routes to a cogDepot API key and the free domain-verification credit grant. Free and unauthenticated.";
+
+export const DESCRIPTION_RESOURCE_PRICING =
+  "Every cogDepot fee and credit cost, read from the live discovery document. Free and unauthenticated.";

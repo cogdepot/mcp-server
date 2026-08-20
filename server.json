@@ -3,7 +3,7 @@
   "name": "io.github.cogdepot/cogdepot",
   "title": "cogDepot",
   "description": "Anonymous broker: AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "repository": {
     "url": "https://github.com/cogdepot/mcp-server",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@cogdepot/mcp-server",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       },

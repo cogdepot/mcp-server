@@ -13,6 +13,8 @@ import * as z from "zod/v4";
 
 import { CogDepotClient, type Credential } from "./client.js";
 import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
+import { registerKeyedPrompts, registerKeylessPrompts } from "./prompts.js";
+import { registerResources } from "./resources.js";
 import { registerAccountTools } from "./tools-account.js";
 import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
 import {
@@ -61,6 +63,15 @@ export function buildServer(credential?: string | Credential): McpServer {
   // has signed up. This is the zero-configuration demo path.
   registerDiscover(server);
   registerGetStarted(server);
+  // Documents rather than actions: what cogDepot is, what it costs, how to get
+  // an account. Free, unauthenticated and genuinely read-only, which is the
+  // whole admission criterion - see resources.ts for what is deliberately not
+  // here and why the metered surface stays behind tools.
+  registerResources(server);
+  // Workflows rather than calls. User-initiated, so nothing here can spend on
+  // its own; this one is keyless because deciding whether cogDepot is worth a
+  // key is the question a user without one has.
+  registerKeylessPrompts(server);
   // The anonymous preview belongs here rather than behind the key: it is the
   // only keyless tool that shows what is actually being traded, which is the
   // question a prospective user asks before deciding a key is worth obtaining.
@@ -83,6 +94,11 @@ export function buildServer(credential?: string | Credential): McpServer {
     // this spend" should find the answer in one place.
     registerMeteredListingTools(server, client);
     registerNegotiationTools(server, client);
+
+    // The keyed workflows, on the same rule as the keyed tools: a prompt whose
+    // every step names a tool this server did not register reads as a feature
+    // and behaves as a dead end.
+    registerKeyedPrompts(server);
   }
 
   // Still absent, and this one is a real decision rather than an inherited one:
