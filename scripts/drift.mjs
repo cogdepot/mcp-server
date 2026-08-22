@@ -62,6 +62,17 @@ const EXCLUDED = {
   // Listed BEFORE the API publishes it, on the same reasoning as the reputation
   // entry in COVERED: a stale-entry warning that clears itself on deploy beats an
   // UNCOVERED failure arriving when nobody is watching for it.
+  "POST /v1/deals/{id}/dispute":
+    "Files a claim against a counterparty of a sealed deal. Excluded on the same " +
+    "reasoning as register_account, not because it spends: it is an ACCUSATION that " +
+    "permanently marks another party's public reputation record, the server " +
+    "adjudicates nothing, and there is no route to withdraw it. An agent that " +
+    "misreads a delivery could mark an honest counterparty forever, and the harm " +
+    "lands on someone who is not the caller and never consented. cogdepot_get_reputation " +
+    "surfaces the dispute counters so a model can still REASON about disputes; filing " +
+    "one is a step a person should take. Revisit if a withdrawal route or an " +
+    "adjudication step ever exists.",
+
   "POST /v1/account/reputation/attestation":
     "Mints a 24-hour PASETO attesting the CALLER'S OWN record - a credential, not a fact. " +
     "What a model can act on is already covered: cogdepot_get_reputation reads any handle's " +
