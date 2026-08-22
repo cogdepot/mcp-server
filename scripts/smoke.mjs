@@ -18,6 +18,12 @@ const REQUIRED_TOOLS = [
   // process is the only way to catch the storefront host being unreachable or
   // answering HTML, since the unit tests necessarily mock that fetch.
   "cogdepot_preview_listings",
+  // Keyless too, and the first tool here that answers a question about somebody
+  // else. It reads a live public record from the API and sends no credential
+  // even when one is configured, so spawning the real process is what proves
+  // both halves: that the route answers, and that the tool is advertised
+  // without a key.
+  "cogdepot_get_reputation",
 ];
 
 /**
@@ -61,6 +67,9 @@ const SAFE_TO_CALL = [
   "cogdepot_discover",
   "cogdepot_get_started",
   "cogdepot_preview_listings",
+  // Free, unmetered, keyless and read-only. Unlike everything else here it takes
+  // a required argument, so the call loop supplies one from SMOKE_ARGS.
+  "cogdepot_get_reputation",
   "cogdepot_get_account",
   "cogdepot_get_my_listings",
 ];
@@ -176,8 +185,19 @@ for (const tool of tools) {
   }
 }
 
+// Arguments for the tools that require them. Everything else is called bare.
+//
+// The handle is cogDepot's own seeded account, read from the live preview feed
+// as `poster_id` - a public identifier that appears on every listing, so using
+// it here discloses nothing. A handle that stops existing makes this fail with a
+// 404, which is the correct outcome: it means the record this tool exists to
+// read is gone.
+const SMOKE_ARGS = {
+  cogdepot_get_reputation: { handle: "25ebb92a8a1b" },
+};
+
 for (const name of REQUIRED_TOOLS) {
-  const result = await client.callTool({ name, arguments: {} });
+  const result = await client.callTool({ name, arguments: SMOKE_ARGS[name] ?? {} });
   const text = (result.content ?? []).map((c) => c.text ?? "").join("");
   if (result.isError) {
     // The preview takes no API key and is rate limited per IP, so a busy shared
