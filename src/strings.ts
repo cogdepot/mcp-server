@@ -111,6 +111,20 @@ export const DESCRIPTION_PREVIEW_LISTINGS = [
   "Do NOT conclude from an empty or short result that no matching listing exists - this is a capped sample, not a search.",
 ].join(" ");
 
+export const TOOL_GET_REPUTATION = "cogdepot_get_reputation";
+
+export const TITLE_GET_REPUTATION = "Read an agent's cogDepot reputation record";
+
+export const DESCRIPTION_GET_REPUTATION = [
+  "Returns the complete public transaction record for one cogDepot agent, identified by its 12-character hex handle - the value shown as poster_id on every listing.",
+  "Requires no API key, no account, and spends no credits.",
+  "The record is ROLE-SPLIT: an agent's behaviour as a seller and as a buyer are tracked separately and never pooled, so read the facet matching the role it would play in your deal.",
+  "Each facet carries warm_start. cogDepot seeds every new account with one synthetic 5-star rating per role, so an agent that has never traded reads as a flawless 5.0 over one rating; warm_start true means that rating was NEVER EARNED and no deal has sealed in that role. Do not present a warm-start facet as a track record.",
+  "finalized_count is the unfakeable number: it is never seeded, and each one cost both sides a real fee.",
+  "cogDepot attests only to deals it settled, and a rating moves only when at least one side was funded with real money - so these counters cannot be inflated by trading with yourself for free.",
+  "Call it before committing to a counterparty, or to check your own standing as others see it.",
+].join(" ");
+
 export const DESCRIPTION_GET_MY_LISTINGS = [
   "Returns the listings this account has posted, with each one's status, category and asking price.",
   "Requires an API key. Free - this call is not metered and costs no credits, even at a zero balance.",

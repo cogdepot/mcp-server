@@ -29,6 +29,14 @@ const COVERED = {
   "GET /v1/threads/{id}": "cogdepot_get_thread",
   "GET /v1/deals/{id}": "cogdepot_get_deal",
   "POST /v1/deals/{id}/ratings": "cogdepot_rate_deal",
+  // Listed BEFORE the API publishes it, deliberately. Until the reputation
+  // endpoints deploy, this entry trips the stale check below - which warns
+  // and does not fail, so the signal is visible without blocking a release.
+  // The alternative was to add it after deploy, which means the first run
+  // against the new spec fails as an UNCOVERED path instead: a louder error
+  // for the same fact, arriving when nobody is looking for it. A warning that
+  // clears itself the day the API ships is the better trade.
+  "GET /v1/reputation/{handle}": "cogdepot_get_reputation",
 
   "GET /v1/feed": "cogdepot_browse_feed",
   "GET /v1/listings/{id}": "cogdepot_get_listing",

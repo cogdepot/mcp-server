@@ -16,6 +16,7 @@ import { getFacts, type CogDepotFacts, type FactsResult } from "./facts.js";
 import { registerKeyedPrompts, registerKeylessPrompts } from "./prompts.js";
 import { registerResources } from "./resources.js";
 import { registerAccountTools } from "./tools-account.js";
+import { registerReputationTool } from "./tools-reputation.js";
 import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
 import {
   registerMeteredListingTools,
@@ -76,6 +77,12 @@ export function buildServer(credential?: string | Credential): McpServer {
   // only keyless tool that shows what is actually being traded, which is the
   // question a prospective user asks before deciding a key is worth obtaining.
   registerPreviewTool(server);
+  // Keyless for the same reason, one step further out: this one answers a
+  // question about a counterparty rather than about the market. The party who
+  // most needs a trust signal is the one deciding whether to deal at all, and
+  // that party does not have an account yet - so a key gate here would publish
+  // the record only to people who had already decided.
+  registerReputationTool(server);
 
   // Keyed but free per call. Registered only when a credential is present: the
   // spec allows the tool set to vary by the authorization presented, and
