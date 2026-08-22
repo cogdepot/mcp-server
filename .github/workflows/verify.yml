@@ -42,4 +42,21 @@ jobs:
       # install, and duplicating both to isolate one network call is not worth
       # it. It runs last so a cogDepot outage cannot mask a real test failure.
       - name: Drift - the API must not grow an endpoint no tool covers
-        run: npm run drift
+        # Exit 2 means the spec was unreachable, not that a claim is false, and the
+        # two must not fail the same way. On 2026-08-22 a production edge cutover
+        # left /openapi.json 404 for a few minutes and this step failed a build over
+        # a change that touched only a workflow file. A guard that blames your code
+        # for somebody else's deploy is one people learn to re-run without reading.
+        #
+        # Exit 1 still fails: that is the API having grown an endpoint no tool covers,
+        # which is the entire reason this exists.
+        run: |
+          set +e
+          npm run drift
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::warning::drift could not reach the API, so nothing was proven either way. Not failing the build."
+            exit 0
+          fi
+          exit "$code"
