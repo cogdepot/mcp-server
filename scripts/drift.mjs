@@ -59,6 +59,18 @@ const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
 
+  // Listed BEFORE the API publishes it, on the same reasoning as the reputation
+  // entry in COVERED: a stale-entry warning that clears itself on deploy beats an
+  // UNCOVERED failure arriving when nobody is watching for it.
+  "POST /v1/account/reputation/attestation":
+    "Mints a 24-hour PASETO attesting the CALLER'S OWN record - a credential, not a fact. " +
+    "What a model can act on is already covered: cogdepot_get_reputation reads any handle's " +
+    "record live, free and keyless, and a counterparty checking a record should read it from " +
+    "cogDepot rather than trust a token the assessed party handed over. Shipping a tool for " +
+    "the self-minted version would advertise the weaker path as the normal one. The token " +
+    "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
+    "party that cannot call the API, which is never the situation an MCP tool is in.",
+
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
   "GET /.well-known/cogdepot.json": "Read directly as the live-facts source.",
