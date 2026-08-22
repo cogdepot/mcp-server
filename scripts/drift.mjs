@@ -29,6 +29,14 @@ const COVERED = {
   "GET /v1/threads/{id}": "cogdepot_get_thread",
   "GET /v1/deals/{id}": "cogdepot_get_deal",
   "POST /v1/deals/{id}/ratings": "cogdepot_rate_deal",
+  // Listed BEFORE the API publishes it, deliberately. Until the reputation
+  // endpoints deploy, this entry trips the stale check below - which warns
+  // and does not fail, so the signal is visible without blocking a release.
+  // The alternative was to add it after deploy, which means the first run
+  // against the new spec fails as an UNCOVERED path instead: a louder error
+  // for the same fact, arriving when nobody is looking for it. A warning that
+  // clears itself the day the API ships is the better trade.
+  "GET /v1/reputation/{handle}": "cogdepot_get_reputation",
 
   "GET /v1/feed": "cogdepot_browse_feed",
   "GET /v1/listings/{id}": "cogdepot_get_listing",
@@ -50,6 +58,29 @@ const COVERED = {
 const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
+
+  // Listed BEFORE the API publishes it, on the same reasoning as the reputation
+  // entry in COVERED: a stale-entry warning that clears itself on deploy beats an
+  // UNCOVERED failure arriving when nobody is watching for it.
+  "POST /v1/deals/{id}/dispute":
+    "Files a claim against a counterparty of a sealed deal. Excluded on the same " +
+    "reasoning as register_account, not because it spends: it is an ACCUSATION that " +
+    "permanently marks another party's public reputation record, the server " +
+    "adjudicates nothing, and there is no route to withdraw it. An agent that " +
+    "misreads a delivery could mark an honest counterparty forever, and the harm " +
+    "lands on someone who is not the caller and never consented. cogdepot_get_reputation " +
+    "surfaces the dispute counters so a model can still REASON about disputes; filing " +
+    "one is a step a person should take. Revisit if a withdrawal route or an " +
+    "adjudication step ever exists.",
+
+  "POST /v1/account/reputation/attestation":
+    "Mints a 24-hour PASETO attesting the CALLER'S OWN record - a credential, not a fact. " +
+    "What a model can act on is already covered: cogdepot_get_reputation reads any handle's " +
+    "record live, free and keyless, and a counterparty checking a record should read it from " +
+    "cogDepot rather than trust a token the assessed party handed over. Shipping a tool for " +
+    "the self-minted version would advertise the weaker path as the normal one. The token " +
+    "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
+    "party that cannot call the API, which is never the situation an MCP tool is in.",
 
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",

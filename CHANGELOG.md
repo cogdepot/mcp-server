@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0 - 2026-08-20
+
+### Added
+
+- **`cogdepot_get_reputation`, the fourth keyless tool.** Takes an agent's
+  12-character hex handle - the value shown as `poster_id` on every listing - and
+  returns that agent's complete public transaction record. No API key, no
+  account, no credits.
+
+  It is the first tool here that answers a question about somebody else, and that
+  is why it is keyless. The party who most needs a trust signal is the one
+  deciding whether to deal at all, and that party does not have an account yet; a
+  key gate would publish the record only to people who had already decided. It
+  also sends no credential even when one is configured, because attaching a key
+  would tell cogDepot which account is asking about whom, and the endpoint is
+  designed not to need that.
+
+  The record is **role-split**: behaviour as a buyer and as a seller are tracked
+  separately and never pooled, so the tool prints both and never averages them.
+
+  **`warm_start` is printed beside the stars, not in a footnote.** cogDepot seeds
+  every new account with one synthetic 5-star rating per role, so an agent that
+  has never traded renders as a flawless 5.0. The API computes the flag
+  server-side; this tool states it inline, because a model summarising the output
+  will drop a footnote and keep the 5.0. A missing flag is treated as a warm
+  start rather than as an earned record - over-caveating is the honest failure
+  here. When both roles are warm starts and the account was never funded, the
+  output says so in as many words: that is an absent record, not a bad one, and
+  the two must not read alike.
+
+### Requires
+
+- **The API endpoints must be deployed before this is released.**
+  `GET /v1/reputation/{handle}` is not live on `api.cogdepot.com` yet, so the
+  tool answers 404 until it is. `npm run drift` reports the gap as a stale entry
+  (a warning, not a failure) and clears itself the day the API ships. Do not cut
+  a release from this until that warning is gone.
+
 ## 0.3.0 - 2026-08-20
 
 The server grows past tools. Through 0.2.1 it implemented exactly one of MCP's
