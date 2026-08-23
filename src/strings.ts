@@ -335,16 +335,43 @@ export const DESCRIPTION_LIST_LISTING_THREADS = [
 ].join(" ");
 
 /**
- * Attached to every response from a tool that moved or could move credits.
+ * Attached to every response from a tool whose route replays a repeated key:
+ * post_listing, open_thread, close_thread and finalize_deal.
  *
  * The API replays a repeated Idempotency-Key rather than acting twice, which is
  * the only thing standing between a retried finalize and a second $1.00 charge.
  * A model cannot use that protection unless it is told the key it just used.
+ *
+ * It says "on the calls that spend" rather than asserting a charge outright,
+ * because close_thread carries this note and closing is free. A note that told a
+ * model a second close would cost it money would be describing a different tool,
+ * and the habit that builds - discounting the retry note because it overstated
+ * the last one - is worth more than the words saved.
  */
 export const IDEMPOTENCY_NOTE =
   "Retry note: if this call's outcome is unclear, retry it with idempotency_key set to the value " +
   "above rather than calling again plainly. cogDepot replays the original result for a repeated key; " +
-  "a fresh call is a second, separate action and a second charge.";
+  "calling again without one mints a fresh key, which is a second, separate action - and on the " +
+  "calls that spend, a second charge.";
+
+/**
+ * Attached to a submitted offer, in place of IDEMPOTENCY_NOTE.
+ *
+ * The offers route does not deduplicate on Idempotency-Key - turn alternation
+ * does that job, because an offer is only accepted when it is this side's turn.
+ * A repeated offer is therefore not replayed; it is refused as `out_of_turn`,
+ * and that refusal means the FIRST one landed.
+ *
+ * The distinction matters because the two notes point a model in opposite
+ * directions. IDEMPOTENCY_NOTE says "retry with the key and you will get the
+ * original result back". Said here it would promise a replay that never comes,
+ * and the 409 that arrives instead reads as a failure when it means success.
+ */
+export const OFFER_RETRY_NOTE =
+  "Retry note: this route is not replayed by key - duplicate offers are caught by turn alternation " +
+  "instead. If the outcome is unclear, read the thread with cogdepot_get_thread before resubmitting. " +
+  "A repeat that answers 409 out_of_turn means the original offer WAS accepted and the turn has " +
+  "passed to the counterparty; treat that as success, not as a failed call to retry.";
 
 /** Shown when the live document could not be reached and older data was used. */
 export const STALENESS_NOTICE =

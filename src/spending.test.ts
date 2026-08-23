@@ -5,6 +5,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { buildServer } from "./core.js";
 import { resetFactsCacheForTesting } from "./facts.js";
 import {
+  IDEMPOTENCY_NOTE,
+  OFFER_RETRY_NOTE,
   TOOL_BROWSE_FEED,
   TOOL_CLOSE_THREAD,
   TOOL_FINALIZE_DEAL,
@@ -466,6 +468,53 @@ describe("the negotiation path", () => {
 
     const sent = calls.find((c) => c.url.includes(path))?.headers["Idempotency-Key"];
     expect(sent).toMatch(/^[0-9a-f-]{36}$/);
+    await close();
+  });
+
+  it.each([
+    [TOOL_OPEN_THREAD, { listing_id: "l-1", diff: "d" }, "/v1/listings/l-1/threads"],
+    [TOOL_FINALIZE_DEAL, { thread_id: "t-1" }, "/v1/threads/t-1/finalize"],
+  ])("%s promises a replay, because its route honours the key", async (name, args, path) => {
+    const { impl } = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      [path]: { status: 200, body: { id: "x" } },
+    });
+    vi.stubGlobal("fetch", impl);
+
+    const { client, close } = await connect();
+    const { text } = await callText(client, name, args);
+
+    expect(text).toContain(IDEMPOTENCY_NOTE);
+    await close();
+  });
+
+  it("tells submit_offer callers what a retry actually does, which is not a replay", async () => {
+    // The offers route does not read Idempotency-Key. It is deduplicated by turn
+    // alternation, so a repeat is refused as out_of_turn rather than replayed -
+    // and that refusal means the FIRST offer landed.
+    //
+    // Printing IDEMPOTENCY_NOTE here would be worse than printing nothing. It
+    // tells a model to retry with the key and expect the original result; what
+    // arrives is a 409, which reads as a failed call and invites a third try on
+    // an offer that was accepted the first time. The two notes are asserted
+    // against each other rather than separately, because the defect is not a
+    // missing string - it is the wrong one of a matched pair.
+    const { impl } = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/v1/threads/t-1/offers": { status: 200, body: { id: "x" } },
+    });
+    vi.stubGlobal("fetch", impl);
+
+    const { client, close } = await connect();
+    const { text } = await callText(client, TOOL_SUBMIT_OFFER, { thread_id: "t-1", diff: "d" });
+
+    expect(text).toContain(OFFER_RETRY_NOTE);
+    expect(text).not.toContain(IDEMPOTENCY_NOTE);
+    expect(text).toMatch(/out_of_turn/);
+    // And it does not echo the key back. The other four print theirs because
+    // reusing it is the retry; printing one here would hand a model a value
+    // whose only documented use is a replay this route will not perform.
+    expect(text).not.toMatch(/idempotency_key:/);
     await close();
   });
 

@@ -261,7 +261,12 @@ export function registerMeteredListingTools(server: McpServer, client: CogDepotC
         idempotency_key: z
           .string()
           .optional()
-          .describe("Pass a previous call's key to retry safely instead of posting twice."),
+          .describe(
+            "Omit this and a fresh key is generated for you, so a first call is never " +
+              "unprotected. Supply one only to RETRY: pass back the idempotency_key printed by " +
+              "the call whose outcome was unclear and cogDepot replays it, instead of posting - " +
+              "and charging 201 credits for - a second listing.",
+          ),
       }),
       annotations: {
         readOnlyHint: false,

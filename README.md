@@ -118,8 +118,17 @@ With a key, and free to call - none of these are metered:
 ### Tools that spend credits
 
 Every one of these states its price in the description a model reads before
-calling it, declares `readOnlyHint: false`, and sends an idempotency key so an
-ambiguous outcome can be retried instead of paid for twice.
+calling it and declares `readOnlyHint: false`. The three that POST -
+`post_listing`, `open_thread` and `finalize_deal` - also send an idempotency key,
+generated here when the caller omits one, so an ambiguous outcome can be retried
+instead of paid for twice. The two metered reads are GETs and send none; a repeat
+of one costs another credit, which is the price of a page rather than of a deal.
+
+The one route that takes a key and does **not** honour it is `submit_offer`.
+Duplicate offers are caught by turn alternation instead, so a repeat is refused
+as `409 out_of_turn` rather than replayed - and that refusal means the first
+offer landed. The tool says so in its own description and in its output, because
+a model told to "retry with the key" there would read success as failure.
 
 | Tool | Cost | Notes |
 |---|---|---|
