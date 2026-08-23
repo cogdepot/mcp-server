@@ -146,10 +146,29 @@ if (missingTools.length > 0) {
 }
 console.log(`drift: ${registered.size} tools registered, all names in COVERED resolve`);
 
-const response = await fetch(OPENAPI_URL, { headers: { accept: "application/json" } });
+// An unreachable spec is "could not check", not "a claim is false", and the
+// difference is the whole usefulness of this guard. On 2026-08-22 a production
+// edge cutover left /openapi.json 404 for a few minutes and this exited 1,
+// failing a build over a change that touched only a workflow file. A guard that
+// reports someone's code as broken because a deploy was mid-flight is a guard
+// people learn to re-run without reading.
+//
+// Exit 2 says so out loud, matching web/scripts/mcp-drift.mjs, and matching what
+// this same file already does a few lines below when the discovery document is
+// unreachable: warn, skip, call it unknown rather than stale.
+let response;
+try {
+  response = await fetch(OPENAPI_URL, { headers: { accept: "application/json" } });
+} catch (err) {
+  console.error(`drift: could not reach ${OPENAPI_URL}: ${err.message}`);
+  console.error("drift: SKIPPED - the spec was unreachable, so nothing was proven either way.");
+  process.exit(2);
+}
 if (!response.ok) {
   console.error(`drift: could not fetch ${OPENAPI_URL} (HTTP ${response.status})`);
-  process.exit(1);
+  console.error("drift: SKIPPED - the spec was unreachable, so nothing was proven either way.");
+  console.error("drift: if this persists, the machine contract itself is down, which is the real problem.");
+  process.exit(2);
 }
 const spec = await response.json();
 

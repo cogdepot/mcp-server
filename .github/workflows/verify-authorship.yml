@@ -32,13 +32,39 @@ jobs:
         run: |
           set -euo pipefail
 
-          # github.event.before is all-zeros for a new branch, and the base may
-          # not exist in a shallow or force-pushed history. Fall back to
-          # checking everything reachable rather than silently checking nothing.
-          if [ -z "${BASE_SHA:-}" ] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            RANGE="$HEAD_SHA"
-          else
+          # Choosing the range is the whole correctness of this check, and the
+          # first version got it wrong in a way that could have caused real
+          # damage. github.event.before is all-zeros for a new branch and points
+          # at a vanished commit after any force-push, so the original fallback
+          # was RANGE="$HEAD_SHA" - everything reachable. That fails closed,
+          # which was the right instinct, but it scans history from before this
+          # rule existed.
+          #
+          # On 2026-08-22 it did exactly that: a force-push correcting one
+          # commit's author left BASE_SHA unreachable, so it walked back and
+          # reported de0fc89 from 2026-08-18 - already on main, under the v0.2.x
+          # and v0.3.0 tags. Following this job's own instruction to rewrite it
+          # would have moved every SHA from that date forward, broken the release
+          # tags, and invalidated the npm provenance attestations that tie
+          # published packages to specific commits. A guard that cannot tell a new
+          # violation from released history will eventually be obeyed by somebody
+          # who does the destructive thing.
+          #
+          # So the fallback is origin/main..HEAD: commits not yet released. That
+          # is the set this rule can actually ask anyone to fix, because history
+          # already on main is immutable in practice - the tags and the provenance
+          # trail depend on those exact SHAs. Still fails closed: if neither a
+          # usable base nor origin/main exists, the job errors rather than
+          # guessing at a range.
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             RANGE="${BASE_SHA}..${HEAD_SHA}"
+          elif git rev-parse --verify --quiet origin/main >/dev/null; then
+            RANGE="origin/main..${HEAD_SHA}"
+            echo "::warning::BASE_SHA unusable (new branch or force-push); checking unreleased commits only ($RANGE)"
+          else
+            echo "::error::Cannot determine a commit range: BASE_SHA is unusable and origin/main is absent."
+            echo "Refusing to guess. Re-run with full history, or push a commit so a valid base exists."
+            exit 1
           fi
 
           echo "Checking $RANGE"

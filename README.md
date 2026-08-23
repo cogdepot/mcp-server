@@ -329,9 +329,25 @@ the deployment and the local runner drive the same web-standard `fetch` handler
 
 ```bash
 npm install
-npm run verify     # typecheck, unit tests with a 95% coverage floor, and a smoke test
-npm run drift      # fails if the API grew an endpoint no tool covers
+npm run verify:local  # typecheck, unit tests, and the networked guards below
+npm run verify        # typecheck, unit tests with a 95% coverage floor, and a smoke test
+npm run drift         # fails if the API grew an endpoint no tool covers
 ```
+
+`verify:local` is the one to run before pushing, and it exists because of a
+gap the other two left. `drift` and `smoke` reach the live API, so they sit
+outside `npm test` deliberately: offline they would fail for reasons that have
+nothing to do with your change, and a check that fails for unrelated reasons
+gets muted or deleted. The cost of that choice was that the two checks most
+likely to fail were the two that never ran locally. Three defects took exactly
+that route, and two of them would have blocked the npm publish, because
+`prepublishOnly` runs `verify`, which runs `smoke` - so they surfaced during a
+release, which is the most expensive place available.
+
+So `verify:local` runs them when the network is there and skips them loudly
+when it is not. It never collapses "passed" into "could not check": the two
+are reported as different outcomes, the same rule `drift` follows for itself
+(exit 1 means a claim is false, exit 2 means the check could not finish).
 
 `npm run smoke` spawns the built binary and speaks real MCP to it. That is not
 redundant with the unit tests, which link client and server in memory: only a
