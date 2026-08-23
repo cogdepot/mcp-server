@@ -44,6 +44,11 @@ const ESTIMATED_COST = [
   "  poster:      201 credits to post, 2,000 at seal        = 2,201 ($1.1005)",
   "  negotiator:  ~2 credits to browse and read, 2,000 held = ~2,002 ($1.001)",
   "  total:       roughly $2.10, non-refundable once sealed",
+  "",
+  "  The idempotency replay and the balance reads are free: a replay is served",
+  "  from the original result, and get_account does not meter. The replay costs",
+  "  201 credits in exactly one case - idempotency not being honoured - which",
+  "  is the bug it exists to find.",
 ].join("\n");
 
 function die(message) {
@@ -159,6 +164,27 @@ function field(text, name) {
   return match?.[1]?.trim();
 }
 
+/**
+ * Reads a credit figure out of a rendered account.
+ *
+ * The account renderer deliberately never prints a raw micro-USD number, so the
+ * only balance available to this script is the human line - "- Spendable:
+ * **1,234 credits** ($0.62)". Parsed by splitting rather than by one dense
+ * regular expression, because the bold markers differ between the two lines and
+ * a pattern covering both is harder to read than it is to get right.
+ *
+ * Returns undefined rather than 0 when the line is missing: a balance that
+ * could not be read must not look like an empty wallet, or every delta
+ * assertion below would compare against a number nobody measured.
+ */
+function credits(text, label) {
+  const line = text.split("\n").find((l) => l.startsWith(`- ${label}:`));
+  if (!line) return undefined;
+  const after = line.replace(/\*/g, "").split(":")[1];
+  const n = Number((after ?? "").trim().split(" ")[0].replace(/,/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function require_(value, what) {
   if (!value) throw new Error(`could not find ${what} in the rendered response`);
   return value;
@@ -197,8 +223,14 @@ try {
     }
   }
 
+  const posterOpening = credits(posterAccount, "Spendable");
+  const negotiatorOpening = credits(negotiatorAccount, "Spendable");
+
   // 3. Post the listing. 201 credits.
-  const posted = await call(poster, "poster", "cogdepot_post_listing", {
+  //
+  // The key is supplied rather than generated inside the tool, because step 3b
+  // has to replay this exact call.
+  const listingArgs = {
     title: `${marker} end-to-end`,
     category: "testing_qa",
     listing_type: "sell",
@@ -208,8 +240,45 @@ try {
       "This listing exists to exercise the full trading loop and carries no real offer. " +
       "It is expected to be sealed by the paired negotiator account within seconds.",
     delivery_deadline_days: 7,
-  });
+    idempotency_key: `e2e-post-${stamp}`,
+  };
+  const posted = await call(poster, "poster", "cogdepot_post_listing", listingArgs);
   const listingId = require_(field(posted, "id"), "the new listing's id");
+
+  // 3b. Replay the identical call with the identical key.
+  //
+  // spending.test.ts already proves the tool SENDS an Idempotency-Key and hands
+  // it back. What no test could reach from inside this repository is whether the
+  // API honours it, and that is the single assertion standing between an
+  // ambiguous outcome - a timeout, a dropped connection, a retrying agent - and
+  // paying to post the same listing twice.
+  //
+  // This costs nothing when it works, because a replay is served from the
+  // original result. It costs 201 credits exactly when it is broken, which is
+  // the case worth 201 credits to discover here rather than in front of a user.
+  const replayed = await call(poster, "poster", "cogdepot_post_listing", listingArgs);
+  const replayedId = field(replayed, "id");
+  if (replayedId !== listingId) {
+    throw new Error(
+      `idempotency is not honoured: replaying the same idempotency_key created ${replayedId} ` +
+        `instead of replaying ${listingId}. A retrying agent would pay to post twice.`,
+    );
+  }
+
+  const posterAfterPost = credits(
+    await call(poster, "poster", "cogdepot_get_account"),
+    "Spendable",
+  );
+  if (posterOpening !== undefined && posterAfterPost !== undefined) {
+    const spent = posterOpening - posterAfterPost;
+    console.log(`e2e: posting cost ${spent} credits across two identical calls`);
+    if (spent > 400) {
+      throw new Error(
+        `the replayed post was charged: ${spent} credits left the poster across two calls with ` +
+          "one idempotency key, which is about twice the price of a single listing.",
+      );
+    }
+  }
 
   // 4. The negotiator finds it through the paid feed, which is the tool that
   // can actually search. Filtering by category keeps the page small.
@@ -235,6 +304,23 @@ try {
     diff: "Accepting the listed terms at $0.50 with the 7-day window. Ready to proceed.",
   });
   openThreadId = require_(field(opened, "id"), "the new thread's id");
+
+  // 6b. The hold has to be real, and visible, before anything relies on it.
+  //
+  // Everything after this point assumes 2,000 credits are in escrow: the
+  // refusal check below asserts they are not touched, and the cleanup path
+  // exists solely to give them back. If the hold were never placed, all of that
+  // would pass while asserting nothing.
+  const negotiatorHeld = credits(
+    await call(negotiator, "negotiator", "cogdepot_get_account"),
+    "Held in escrow",
+  );
+  if (negotiatorHeld !== undefined && negotiatorHeld < 2000) {
+    throw new Error(
+      `opening the thread held ${negotiatorHeld} credits, not the 2,000 the documents promise. ` +
+        "Either the hold was not placed or it is not being reported.",
+    );
+  }
 
   // 7. The poster sees it arrive in their inbox. Free.
   const inbox = await call(poster, "poster", "cogdepot_list_listing_threads", {
@@ -262,6 +348,54 @@ try {
     thread_id: openThreadId,
     diff: "Agreed: $0.50 with the 7-day window. Offer stands for acceptance.",
   });
+
+  // 9b. Finalize is poster-only, and being refused must cost nothing.
+  //
+  // Poster-only since 2026-08-01. A refusal that charged anyway would be the
+  // worst shape this API could take: the caller is told no and pays 2,000
+  // credits for the privilege, on the one call that cannot be undone.
+  //
+  // If this ever SUCCEEDS the deal has been sealed by the wrong party. The run
+  // records that and stops rather than letting the poster finalize a second
+  // time - the money is gone either way at that point, a double seal need not
+  // be.
+  const negotiatorBeforeRefusal = credits(
+    await call(negotiator, "negotiator", "cogdepot_get_account"),
+    "Spendable",
+  );
+  console.log(`\n${"=".repeat(72)}`);
+  console.log("[guard] negotiator: cogdepot_finalize_deal (must be refused)");
+  console.log("=".repeat(72));
+  const refusal = await negotiator.callTool({
+    name: "cogdepot_finalize_deal",
+    arguments: { thread_id: openThreadId },
+  });
+  const refusalText = (refusal.content ?? []).map((c) => c.text ?? "").join("");
+  console.log(refusalText);
+
+  if (!refusal.isError) {
+    sealed = true;
+    openThreadId = undefined;
+    throw new Error(
+      "finalize_deal is NOT poster-only: the negotiator sealed the deal. Only the " +
+        "listing poster is supposed to be able to, and the deal is now sealed regardless.",
+    );
+  }
+
+  const negotiatorAfterRefusal = credits(
+    await call(negotiator, "negotiator", "cogdepot_get_account"),
+    "Spendable",
+  );
+  if (
+    negotiatorBeforeRefusal !== undefined &&
+    negotiatorAfterRefusal !== undefined &&
+    negotiatorAfterRefusal !== negotiatorBeforeRefusal
+  ) {
+    throw new Error(
+      `the refused finalize charged the negotiator ${negotiatorBeforeRefusal - negotiatorAfterRefusal} ` +
+        "credits. Being told no has to be free.",
+    );
+  }
 
   // 10. The POSTER seals it - the API enforces "only the listing poster may
   // finalize" with a 403. 2,000 credits from each side, irreversible, and the
