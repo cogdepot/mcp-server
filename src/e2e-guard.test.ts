@@ -37,7 +37,17 @@ const FULLY_ARMED = {
   COGDEPOT_E2E_CONFIRM: "spend",
 };
 
-describe("the end-to-end script refuses to spend where it should not", () => {
+// Every test in this block spawns a real `node scripts/e2e.mjs`, and vitest's
+// default budget is 5s per test. That is ample in isolation - the file runs in
+// under a second on its own - but not inside a loaded full-suite run, where the
+// FIRST spawn also pays module-resolution cold start. On 2026-08-23 that is
+// exactly what happened: the first case timed out at 5021ms while its sibling,
+// spawning the same script one line later, passed in 191ms.
+//
+// A flaky guard is worse than a slow one. These assert the refusals on the only
+// script here that spends real money, and a check that goes red for reasons
+// unrelated to your change is one people learn to re-run without reading it.
+describe("the end-to-end script refuses to spend where it should not", { timeout: 30_000 }, () => {
   it.each(["https://api.cogdepot.com", "https://cogdepot.com"])(
     "refuses production (%s) even with keys and confirmation set",
     (baseUrl) => {
