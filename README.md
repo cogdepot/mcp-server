@@ -118,8 +118,17 @@ With a key, and free to call - none of these are metered:
 ### Tools that spend credits
 
 Every one of these states its price in the description a model reads before
-calling it, declares `readOnlyHint: false`, and sends an idempotency key so an
-ambiguous outcome can be retried instead of paid for twice.
+calling it and declares `readOnlyHint: false`. The three that POST -
+`post_listing`, `open_thread` and `finalize_deal` - also send an idempotency key,
+generated here when the caller omits one, so an ambiguous outcome can be retried
+instead of paid for twice. The two metered reads are GETs and send none; a repeat
+of one costs another credit, which is the price of a page rather than of a deal.
+
+The one route that takes a key and does **not** honour it is `submit_offer`.
+Duplicate offers are caught by turn alternation instead, so a repeat is refused
+as `409 out_of_turn` rather than replayed - and that refusal means the first
+offer landed. The tool says so in its own description and in its output, because
+a model told to "retry with the key" there would read success as failure.
 
 | Tool | Cost | Notes |
 |---|---|---|
@@ -363,9 +372,27 @@ reveal two parties to each other on every push.
 
 `npm run e2e` is the only thing that exercises the tools which move credits. It
 posts a listing, browses for it, opens a negotiation, counters, seals the deal,
-reads the reveal from both sides and rates it - printing every response, because
-its purpose is to put real payloads in front of a human rather than to assert
-against a shape that was guessed from the OpenAPI document.
+reads the reveal from both sides and rates it, printing every response - because
+its first purpose is to put real payloads in front of a human rather than to
+assert against a shape that was guessed from the OpenAPI document.
+
+It also asserts the three things about spending that no test in this repository
+can reach, because they are behaviours of the API rather than of this client:
+
+- **A retry with the same `idempotency_key` is replayed, not charged again.**
+  The unit tests prove the key is sent and handed back; only a real second call
+  proves the API honours it. This is what stands between an ambiguous outcome -
+  a timeout, a dropped connection, a retrying agent - and paying twice.
+- **Opening a thread really holds 2,000 credits.** Everything after it assumes
+  the hold exists, including the cleanup that gives it back, so an unplaced hold
+  would let all of that pass while asserting nothing.
+- **`finalize_deal` refuses a non-poster, and the refusal is free.** Poster-only
+  since 2026-08-01. A refusal that charged anyway would be the worst shape this
+  API could take, on the one call that cannot be undone.
+
+Both are free when they hold: a replay is served from the original result, and
+reading a balance is not metered. The replay costs 201 credits in exactly one
+case, which is the case worth finding here.
 
 It costs about **$2.10** per run and is deliberately awkward to start:
 

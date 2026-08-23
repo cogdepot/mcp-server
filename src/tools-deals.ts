@@ -30,6 +30,7 @@ import {
   DESCRIPTION_RATE_DEAL,
   DESCRIPTION_SUBMIT_OFFER,
   IDEMPOTENCY_NOTE,
+  OFFER_RETRY_NOTE,
   TITLE_CLOSE_THREAD,
   TITLE_FINALIZE_DEAL,
   TITLE_GET_DEAL,
@@ -247,6 +248,15 @@ function asThreads(body: unknown): Record<string, unknown>[] {
  * failure that matters here is not a rejected call but an ambiguous one: a
  * finalize whose response was lost leaves a model choosing between a possible
  * double charge and a possibly abandoned deal, and the key removes the choice.
+ * The key is generated here when the caller omits one, so the protection is
+ * never absent by default and the header is never sent empty - a caller only has
+ * to supply a key in order to RETRY.
+ *
+ * `submit_offer` is the exception and is documented as one. Its route does not
+ * read the header: duplicates are caught by turn alternation, so a repeat is
+ * refused as `out_of_turn` rather than replayed. It still sends a key - harmless,
+ * and cheaper than a special case in the client - but it must not claim the
+ * replay the other four get, which is why it carries OFFER_RETRY_NOTE instead.
  */
 export function registerNegotiationTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
@@ -293,7 +303,12 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
         idempotency_key: z
           .string()
           .optional()
-          .describe("Pass a previous call's key to retry without placing a second hold."),
+          .describe(
+            "Omit this and a fresh key is generated for you, so a first call is never " +
+              "unprotected. Supply one only to RETRY: pass back the idempotency_key printed by " +
+              "the call whose outcome was unclear and cogDepot replays it, rather than placing a " +
+              "second 2,000-credit hold.",
+          ),
       }),
       annotations: {
         readOnlyHint: false,
@@ -344,7 +359,12 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
         idempotency_key: z
           .string()
           .optional()
-          .describe("Pass a previous call's key to retry without submitting twice."),
+          .describe(
+            "Accepted, but it is NOT what makes a retry safe here: this route does not read the " +
+              "key, and relies on turn alternation instead, so a repeat is refused rather than " +
+              "replayed. If an outcome is unclear, read the thread with cogdepot_get_thread; a " +
+              "409 out_of_turn means the first offer landed.",
+          ),
       }),
       annotations: {
         readOnlyHint: false,
@@ -367,7 +387,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
             "This is now the standing diff. If the counterparty finalizes, these are the terms " +
               "they accept - so it must be terms this side is willing to be held to.",
             "",
-            `idempotency_key: ${key}`,
+            OFFER_RETRY_NOTE,
           ].join("\n"),
         );
       } catch (error) {
@@ -383,7 +403,14 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
       description: DESCRIPTION_CLOSE_THREAD,
       inputSchema: z.object({
         thread_id: z.string().min(1).describe("The thread to close."),
-        idempotency_key: z.string().optional().describe("Pass a previous call's key to retry."),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            "Omit this and a fresh key is generated for you. Supply one only to RETRY a close " +
+              "whose outcome was unclear; closing is free, so the cost of a blind repeat is a " +
+              "confusing error rather than money.",
+          ),
       }),
       annotations: {
         readOnlyHint: false,
@@ -403,9 +430,20 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           idempotencyKey: key,
         });
         return toolText(
-          `Thread ${thread_id} is closed and cannot be reopened. Any escrow hold it carried has ` +
-            "been released back to spendable - confirm with cogdepot_get_account. Reaching this " +
-            "counterparty again means a new thread and a new 2,000-credit hold.",
+          [
+            `Thread ${thread_id} is closed and cannot be reopened. Any escrow hold it carried has ` +
+              "been released back to spendable - confirm with cogdepot_get_account. Reaching this " +
+              "counterparty again means a new thread and a new 2,000-credit hold.",
+            "",
+            // Printed for the same reason the spending tools print theirs: the
+            // schema tells a caller to retry with the key from the call whose
+            // outcome was unclear, and a key that is never shown cannot be
+            // passed back. Closing is free, so this buys clarity rather than
+            // money - a replayed close reports the close instead of a 404 on a
+            // thread that is already gone.
+            `idempotency_key: ${key}`,
+            IDEMPOTENCY_NOTE,
+          ].join("\n"),
         );
       } catch (error) {
         return toolError(error);
@@ -424,8 +462,10 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           .string()
           .optional()
           .describe(
-            "Pass a previous call's key to retry safely. Without it a repeat is a second, " +
-              "separately charged attempt.",
+            "Omit this and a fresh key is generated for you, so a first call is never unprotected. " +
+              "It is the RETRY that needs it: pass back the idempotency_key printed by the call " +
+              "whose outcome was unclear, and cogDepot replays that result. Calling again without " +
+              "it means a new key, which is a second attempt and a second $1.00 charge.",
           ),
       }),
       annotations: {
