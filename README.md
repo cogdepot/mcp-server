@@ -124,11 +124,14 @@ generated here when the caller omits one, so an ambiguous outcome can be retried
 instead of paid for twice. The two metered reads are GETs and send none; a repeat
 of one costs another credit, which is the price of a page rather than of a deal.
 
-The one route that takes a key and does **not** honour it is `submit_offer`.
-Duplicate offers are caught by turn alternation instead, so a repeat is refused
-as `409 out_of_turn` rather than replayed - and that refusal means the first
-offer landed. The tool says so in its own description and in its output, because
-a model told to "retry with the key" there would read success as failure.
+`submit_offer` is the one mutating call with no idempotency behaviour at all.
+The API declares no `Idempotency-Key` parameter on that route and ignores the
+header if it arrives. Duplicate offers are caught by turn alternation instead, so
+a repeat is refused as `409 out_of_turn` rather than replayed, and that refusal
+means the first offer landed. The tool keeps the parameter so a caller that sends
+a key on every mutating call is not rejected for it, but its description says
+IGNORED and its output carries a different retry note, because a model told to
+"retry with the key" there would read success as failure.
 
 | Tool | Cost | Notes |
 |---|---|---|
