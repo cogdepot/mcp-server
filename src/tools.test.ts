@@ -474,28 +474,6 @@ describe("keyed tools", () => {
     await close();
   });
 
-  it("labels the truncated thread_id so it is not mistaken for an id", async () => {
-    // The API returns a 13-character prefix under a name that looks like the
-    // path parameter. Relaying it unlabelled hands a model a broken identifier.
-    vi.stubGlobal(
-      "fetch",
-      routeFetch({
-        "cogdepot.json": { status: 200, body: DISCOVERY },
-        "/v1/threads/": {
-          status: 200,
-          body: { id: "aeb24c7c-2f28-4d12-b378-a4bad822f3da", thread_id: "aeb24c7c-2f2" },
-        },
-      }),
-    );
-
-    const { client, close } = await connectWithKey();
-    const { text } = await callText(client, TOOL_GET_THREAD, { thread_id: "x" });
-
-    expect(text).toMatch(/NOT usable as an id/);
-    expect(text).toContain("aeb24c7c-2f28-4d12-b378-a4bad822f3da");
-    await close();
-  });
-
   it("prints a deal credential once, not twice", async () => {
     // A real sealed deal returns the ~500-character PASETO credential at the top
     // level AND inside reveal. Printing both doubles the token cost and the

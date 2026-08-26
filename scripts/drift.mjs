@@ -7,9 +7,9 @@
  * exactly the way this exists to detect.
  *
  * Deliberately NOT keyed off the A2A agent card. The earlier plan proposed that
- * on the basis that the card's `skills` array was the curated tool list; T977
- * has since reduced the card to a single `onboarding` skill and a test enforces
- * it, so the card can no longer answer this question.
+ * on the basis that the card's `skills` array was the curated tool list; the
+ * card has since been reduced to a single `onboarding` skill and a test
+ * enforces it, so the card can no longer answer this question.
  *
  * Every path is either covered by a tool or listed with a reason. Adding a new
  * endpoint to the API therefore breaks this build until someone decides which
