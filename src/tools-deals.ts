@@ -194,8 +194,8 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
  * renderer that was never meant to see a list - and it took a real API response
  * to expose it, because the shape was assumed rather than read.
  *
- * Each thread is rendered field by field instead, so the uUSD conversion and the
- * short-`thread_id` warning both apply exactly as they do on a single thread.
+ * Each thread is rendered field by field instead, so the uUSD conversion applies
+ * exactly as it does on a single thread.
  */
 function renderThreadList(heading: string, body: unknown): string {
   const threads = asThreads(body);

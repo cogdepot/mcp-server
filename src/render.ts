@@ -48,14 +48,6 @@ export function renderField(key: string, value: unknown): string[] {
     return [`- **${label}**: ${formatCredits(Math.floor(value / MICRO_USD_PER_CREDIT))}`];
   }
 
-  // The API returns both `id` and `thread_id`, and `thread_id` is a truncated
-  // prefix that 404s on every path that takes an id. Relaying it unlabelled
-  // hands a model a broken identifier that looks like the right one. Filed
-  // upstream against the API; until that ships, say what it is.
-  if (key === "thread_id" && typeof value === "string") {
-    return [`- **${key}**: ${value} (short display form - NOT usable as an id; use \`id\` above)`];
-  }
-
   if (typeof value === "object") {
     return [
       `- **${key}**:`,

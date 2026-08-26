@@ -589,7 +589,6 @@ describe("the negotiation path", () => {
           body: [
             {
               id: "cafbce10-9f9c-47f0-a8da-33f9642a2538",
-              thread_id: "cafbce10-9f9",
               status: "open",
               turn: "poster",
               amount_micro: 1000000,
@@ -608,9 +607,7 @@ describe("the negotiation path", () => {
     expect(text).not.toContain("amount_micro");
     expect(text).not.toContain("1000000");
     expect(text).toContain("2,000 credits ($1.00)");
-    // The truncated thread_id must still carry its warning inside a list.
-    expect(text).toMatch(/NOT usable as an id/);
-    // And the real id must survive, or a model cannot act on the inbox at all.
+    // The id must survive, or a model cannot act on the inbox at all.
     expect(text).toContain("cafbce10-9f9c-47f0-a8da-33f9642a2538");
     await close();
   });
