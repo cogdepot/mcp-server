@@ -344,10 +344,11 @@ builds the bundle, updates the staging stack, asserts the deployed server answer
 with that tag, and only then does the same for production. A deploy that applies
 but does not change the running build fails the release rather than passing it.
 
-It was manual until 0.5.0, and forgetting it is how the hosted server silently
-fell behind the published package: it served 0.3.0 while npm served 0.4.0, two
-releases of tool descriptions that no connector user ever saw. `npm run drift`
-now warns when the deployed version trails npm, as a backstop.
+It was manual through 0.5.0 and automated from 0.5.1, and forgetting it is how
+the hosted server silently fell behind the published package: it served 0.3.0
+while npm served 0.4.0, two releases of tool descriptions that no connector user
+ever saw. `npm run drift` now warns when the deployed version trails npm, as a
+backstop.
 
 `deploy.yml` needs a per-stage OIDC role trusting this repository's GitHub
 environment of the same name, defined in the cogDepot repository's

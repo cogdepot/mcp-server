@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.1 - 2026-08-26
+
+**No runtime change.** `src/` is byte-identical to 0.5.0 and the tools behave
+exactly as they did. This release exists so the hosted server can be deployed by
+the pipeline that now does that, and the README that ships in the package
+documents it.
+
+### Changed
+
+- **The hosted server deploys from the release tag.** Nothing in CI deployed it
+  before: `publish.yml` shipped npm and the registry entry while the Lambda was
+  updated by hand, so the two could drift and did - `mcp.cogdepot.com` served
+  0.3.0 for six days while npm served 0.4.0, two releases of tool descriptions
+  that reached the registry and never reached the connector users who read them.
+  `deploy.yml` now fires on the same tag, deploys staging, asserts the deployed
+  server answers with that tag, then does production. A deploy that applies
+  without changing the running build fails the release rather than passing it.
+
+- **`npm run drift` reports a stale deployment.** It asks the hosted server what
+  version it is and compares that to what npm serves. A warning, not a failure:
+  it runs on paths where a stale deployment is not the caller's problem in that
+  moment, and a red that blocks work nobody can act on is a red that gets
+  bypassed. This is the backstop; `deploy.yml` is the fix.
+
 ## 0.5.0 - 2026-08-26
 
 Nothing here changes what a call does. Everything here changes what a model is
