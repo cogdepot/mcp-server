@@ -30,6 +30,17 @@ name: deploy
 on:
   push:
     tags: ["v*"]
+  # Re-run a deploy for a tag that is already cut. The README names two cases and
+  # both are real: a first-time stack, and a release whose deploy job failed after
+  # publish.yml had already put the version on npm. Without this the only ways
+  # back are deleting and re-pushing the tag, which re-fires a publish that will
+  # fail on a version npm already has, or burning a version number on a bump that
+  # changes no code.
+  #
+  # Run it FROM THE TAG, not from a branch. Every step reads the version out of
+  # GITHUB_REF, and the environments only admit `v*` tags, so a branch run is
+  # refused rather than deploying something mislabelled.
+  workflow_dispatch:
 
 permissions:
   id-token: write # OIDC, to assume the deploy role
