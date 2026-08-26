@@ -356,7 +356,11 @@ environment of the same name, defined in the cogDepot repository's
 variables `MCP_DEPLOY_ROLE_STAGING` and `MCP_DEPLOY_ROLE_PRODUCTION` rather than
 written into the workflow, because it carries the AWS account id and this
 repository is public. The sub is pinned to `environment:<stage>` with no
-wildcards, so those environments' protection rules are the gate.
+wildcards, so those environments' protection rules are the gate. Both admit `v*`
+tags only. **`production` additionally requires a reviewer**, so a tagged release
+publishes to npm and deploys staging on its own, then waits for an approval
+before production. A release is not finished when the tag lands; it is finished
+when that approval is given.
 
 **To deploy by hand** - a first-time stack, or a release whose deploy job failed
 - the same three steps run locally. Check what is live first:
