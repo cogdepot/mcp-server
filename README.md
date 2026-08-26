@@ -337,6 +337,55 @@ COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
 the deployment and the local runner drive the same web-standard `fetch` handler
 `createRemoteHandler` returns.
 
+### Deploying the remote server
+
+**Nothing in CI deploys it.** `publish.yml` fires on a `v*` tag and publishes the
+npm package and the registry entry; `release.yml` promotes `develop` to `main`.
+Neither touches the Lambda. That step is manual, and forgetting it is how the
+hosted server silently falls behind the published package - it served 0.3.0 while
+npm served 0.4.0, which is two releases of tool descriptions that no connector
+user ever saw.
+
+**Treat a release as unfinished until this has run.** The check is one request:
+
+```bash
+curl -s -X POST https://mcp.cogdepot.com -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"0"}}}'
+```
+
+`serverInfo.version` in the reply is what is actually deployed. If it does not
+match `package.json`, the deployment is stale.
+
+The template takes a pre-built bundle, so no SAM CLI and no in-pipeline build are
+involved. Build, package, then update the stack:
+
+```bash
+npm run build:lambda
+```
+
+```bash
+aws cloudformation package --template-file infra/sam/template.yaml --s3-bucket cogdepot-production-sam-artifacts-$(aws sts get-caller-identity --query Account --output text) --output-template-file infra/sam/.packaged-production.yaml
+```
+
+The packaged template is gitignored: it names an S3 object that exists in one
+account only and is rewritten on every deploy.
+
+Deploy with the parameters the stack already carries rather than retyping them.
+They include an ACM ARN, a Cognito user-pool issuer and an app-client id, none of
+which belong in this file:
+
+```bash
+aws cloudformation describe-stacks --stack-name cogdepot-mcp-production --query 'Stacks[0].Parameters' --output table
+```
+
+```bash
+aws cloudformation deploy --template-file infra/sam/.packaged-production.yaml --stack-name cogdepot-mcp-production --capabilities CAPABILITY_IAM --parameter-overrides Stage=production DomainName=mcp.cogdepot.com ApiBaseUrl=https://api.cogdepot.com CertificateArn=<from the table above> OAuthIssuer=<from the table above> OAuthClientId=<from the table above> OAuthResource=https://mcp.cogdepot.com "OAuthScopes=<from the table above>"
+```
+
+Staging is the same three commands with `staging` for `production`,
+`staging.mcp.cogdepot.com` for the domain, and `https://staging.api.cogdepot.com`
+for the API. Deploy staging first: the two stacks share a template, so a template
+error surfaces there rather than on the name agents are connected to.
+
 ## Development
 
 ```bash

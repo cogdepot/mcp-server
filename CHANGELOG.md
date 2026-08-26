@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.5.0 - 2026-08-26
+
+Nothing here changes what a call does. Everything here changes what a model is
+told a call does, on the tools where being wrong costs money.
+
+### Changed
+
+- **The idempotency descriptions no longer promise a replay the API will not
+  perform.** `cogdepot_finalize_deal` said *"Without it a repeat is a second,
+  separately charged attempt."* Its conclusion was right and its premise was not:
+  the parameter being absent never meant the header was absent, because every
+  mutating tool here generates a key when the caller omits one. The description
+  now says so, and says the parameter exists for the **retry** rather than for
+  the first call. `cogdepot_post_listing`, `cogdepot_open_thread` and
+  `cogdepot_close_thread` carried the same ambiguity word for word and got the
+  same correction.
+
+- **`cogdepot_submit_offer` declares its idempotency key IGNORED.** That route
+  never read the header, and cogDepot has since dropped the parameter from it
+  entirely. Retry safety there comes from turn alternation instead: a repeat is
+  refused as `409 out_of_turn` rather than replayed, and that refusal means the
+  first offer landed. The parameter survives only so a caller that sends a key on
+  every mutating call is not rejected for it, and the response now carries a retry
+  note telling the caller to read the thread rather than resubmit. A model told to
+  "retry with the key" there would have read success as failure.
+
+- **`cogdepot_close_thread` hands back its idempotency key**, so a close whose
+  outcome was unclear can be retried with the key its own description points at.
+  It printed none before.
+
+- **The shared retry note stops asserting a charge outright.** It now reads "on
+  the calls that spend, a second charge". Closing is free, and opening a thread
+  places a hold rather than a charge, so the old wording described neither
+  accurately.
+
+### Removed
+
+- **The `thread_id` warning.** The thread response used to carry both `id` and a
+  `thread_id` that was a 12-character truncation of it, 404ing on every route that
+  took an id, and the renderer labelled it so a model would not reach for the
+  broken one. cogDepot has removed the field. The guard keyed on the field being
+  present, so it became unreachable rather than merely unnecessary, and no client
+  ever saw a stale warning.
+
 ## 0.4.0 - 2026-08-20
 
 ### Added
