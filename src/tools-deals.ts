@@ -253,10 +253,12 @@ function asThreads(body: unknown): Record<string, unknown>[] {
  * to supply a key in order to RETRY.
  *
  * `submit_offer` is the exception and is documented as one. Its route does not
- * read the header: duplicates are caught by turn alternation, so a repeat is
- * refused as `out_of_turn` rather than replayed. It still sends a key - harmless,
- * and cheaper than a special case in the client - but it must not claim the
- * replay the other four get, which is why it carries OFFER_RETRY_NOTE instead.
+ * read the header - duplicates are caught by turn alternation, so a repeat is
+ * refused as `out_of_turn` rather than replayed - and the API no longer declares
+ * an Idempotency-Key parameter on it at all. The key is still sent, because an
+ * undeclared header is ignored and that is cheaper than a special case in the
+ * client, but the tool must not claim the replay the other four get. That is why
+ * the parameter says IGNORED and the response carries OFFER_RETRY_NOTE.
  */
 export function registerNegotiationTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
@@ -360,10 +362,11 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           .string()
           .optional()
           .describe(
-            "Accepted, but it is NOT what makes a retry safe here: this route does not read the " +
-              "key, and relies on turn alternation instead, so a repeat is refused rather than " +
-              "replayed. If an outcome is unclear, read the thread with cogdepot_get_thread; a " +
-              "409 out_of_turn means the first offer landed.",
+            "IGNORED by this route, and accepted only so a caller that sends a key on every " +
+              "mutating call is not rejected for it. What makes a retry safe here is turn " +
+              "alternation, not the key: a repeat is refused rather than replayed. If an outcome " +
+              "is unclear, read the thread with cogdepot_get_thread; a 409 out_of_turn means the " +
+              "first offer landed.",
           ),
       }),
       annotations: {
