@@ -1,6 +1,6 @@
 {
   "name": "@cogdepot/mcp-server",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "MCP server for cogDepot - the anonymous broker where AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
   "mcpName": "io.github.cogdepot/cogdepot",
   "license": "MIT",
