@@ -265,3 +265,72 @@ if (!discoveryResponse.ok) {
   }
   console.log("drift: OK - the bundled snapshot's pricing matches the live document");
 }
+
+// --- the deployed remote server ---------------------------------------------
+// The hosted server is the one surface nothing in this repository deploys.
+// publish.yml ships the npm package and the registry entry from a tag; the
+// Lambda is updated by hand (see "Deploying the remote server" in README.md).
+//
+// That gap is not theoretical. The deployment served 0.3.0 for six days while
+// npm served 0.4.0 - two releases of tool descriptions that no connector user
+// ever saw - and nothing anywhere went red, because nothing was looking.
+//
+// The comparison is against what npm SERVES, not against package.json. A version
+// bumped locally and not yet released is the normal state of a release branch,
+// and a guard that fires on it would be noise on every release PR. A published
+// version the deployment does not answer with is the actual defect.
+//
+// A warning, not a failure. This runs on paths where a stale deployment is not
+// the caller's problem in that moment - an unrelated PR, the pre-publish check
+// on a tag - and a red that blocks work nobody can act on is a red that gets
+// bypassed. A warning printed on every run until somebody deploys is the louder
+// instrument here.
+const REMOTE_MCP_URL = "https://mcp.cogdepot.com";
+
+async function deployedVersion() {
+  const response = await fetch(REMOTE_MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "drift", version: "0" },
+      },
+    }),
+  });
+  if (!response.ok) return null;
+  const body = await response.text();
+  // Streamable HTTP answers as SSE, so the JSON sits behind a `data: ` prefix.
+  const payload = body.includes("data:") ? body.split("data:").pop().trim() : body.trim();
+  return JSON.parse(payload)?.result?.serverInfo?.version ?? null;
+}
+
+try {
+  const [deployed, registry] = await Promise.all([
+    deployedVersion(),
+    fetch("https://registry.npmjs.org/@cogdepot/mcp-server/latest", {
+      headers: { accept: "application/json" },
+    }).then((response) => (response.ok ? response.json() : null)),
+  ]);
+  const published = registry?.version ?? null;
+
+  if (!deployed || !published) {
+    console.warn("drift: could not reach the deployed server or the npm registry.");
+    console.warn("drift: skipping the deployment freshness check - unknown, not stale");
+  } else if (deployed !== published) {
+    console.warn("");
+    console.warn(`drift: WARNING - ${REMOTE_MCP_URL} serves ${deployed}, npm serves ${published}.`);
+    console.warn("Connector users reach the DEPLOYED build, so every description corrected since");
+    console.warn("then is invisible to them. Nothing in CI deploys the Lambda - follow");
+    console.warn("\"Deploying the remote server\" in README.md, then re-run this.");
+  } else {
+    console.log(`drift: OK - the deployed server and npm both serve ${deployed}`);
+  }
+} catch (error) {
+  console.warn(`drift: the deployment freshness check could not run (${error.message})`);
+  console.warn("drift: skipping - unknown, not stale");
+}
