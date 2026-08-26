@@ -21,8 +21,9 @@ name: deploy
 #
 #   The sub is pinned to `environment:<stage>` with no wildcards, so the
 #   environment's protection rules are the gate that stops an arbitrary ref from
-#   claiming it. Configure them; an unprotected environment makes the pinning
-#   decorative.
+#   claiming it. Both admit `v*` tags only, and production additionally requires
+#   a reviewer - so the production job pauses for approval and does not deploy on
+#   the tag alone. An unprotected environment would make the pinning decorative.
 #
 # Independent of publish.yml on purpose. Both fire on the tag, neither blocks the
 # other, and a missing role fails the deploy without also failing the publish.
