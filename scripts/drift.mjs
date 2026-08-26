@@ -287,31 +287,14 @@ if (!discoveryResponse.ok) {
 // instrument here.
 const REMOTE_MCP_URL = "https://mcp.cogdepot.com";
 
-async function deployedVersion() {
-  const response = await fetch(REMOTE_MCP_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "drift", version: "0" },
-      },
-    }),
-  });
-  if (!response.ok) return null;
-  const body = await response.text();
-  // Streamable HTTP answers as SSE, so the JSON sits behind a `data: ` prefix.
-  const payload = body.includes("data:") ? body.split("data:").pop().trim() : body.trim();
-  return JSON.parse(payload)?.result?.serverInfo?.version ?? null;
-}
+// Shared with assert-deployed-version.mjs, which deploy.yml runs against the tag
+// it just shipped. Two inline copies of one request is how the release gate and
+// this guard would come to disagree about what "deployed" means.
+const { deployedVersion } = await import("./deployed-version.mjs");
 
 try {
   const [deployed, registry] = await Promise.all([
-    deployedVersion(),
+    deployedVersion(REMOTE_MCP_URL),
     fetch("https://registry.npmjs.org/@cogdepot/mcp-server/latest", {
       headers: { accept: "application/json" },
     }).then((response) => (response.ok ? response.json() : null)),

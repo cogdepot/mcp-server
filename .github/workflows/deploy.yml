@@ -1,0 +1,147 @@
+name: deploy
+
+# Deploys the hosted MCP server from the same tag that publishes the package.
+#
+# WHY THIS EXISTS: it did not, and that was the bug. publish.yml shipped npm and
+# the registry entry from a `v*` tag while the Lambda was updated by hand, so the
+# two could drift and did - mcp.cogdepot.com served 0.3.0 for six days while npm
+# served 0.4.0. Two releases of tool descriptions reached the registry and never
+# reached the connector users who read them, and nothing anywhere went red.
+#
+# `npm run drift` now warns when the deployed version trails the published one.
+# That is the backstop. This is the fix: tagging is the single action, and a
+# release that cannot deploy fails loudly instead of quietly staying behind.
+#
+# PREREQUISITE, which this workflow cannot create:
+#   An OIDC deploy role per stage, trusting this repository's GitHub environment
+#   of the same name. Defined in the cogDepot repository as
+#   infra/terraform/modules/iam_mcp.tf (var.github_sub_mcp). Its ARN is read from
+#   a repository variable rather than written here, because it carries the AWS
+#   account id and this repository is public.
+#
+#   The sub is pinned to `environment:<stage>` with no wildcards, so the
+#   environment's protection rules are the gate that stops an arbitrary ref from
+#   claiming it. Configure them; an unprotected environment makes the pinning
+#   decorative.
+#
+# Independent of publish.yml on purpose. Both fire on the tag, neither blocks the
+# other, and a missing role fails the deploy without also failing the publish.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write # OIDC, to assume the deploy role
+  contents: read
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    # Pins the OIDC sub. The role's trust policy names this environment.
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:lambda
+
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ vars.MCP_DEPLOY_ROLE_STAGING }}
+          aws-region: us-east-1
+
+      - name: Package and deploy
+        env:
+          STACK: cogdepot-mcp-staging
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+
+          aws cloudformation package \
+            --template-file infra/sam/template.yaml \
+            --s3-bucket "cogdepot-staging-sam-artifacts-$ACCOUNT" \
+            --output-template-file "infra/sam/.packaged-staging.yaml"
+
+          # Parameters come from the stack itself rather than from this file.
+          # Two reasons: they include an ACM ARN, a Cognito issuer and an
+          # app-client id, none of which belong in a public repository; and a
+          # deploy should not be able to silently change configuration it was
+          # not asked to change. One array element per Key=Value so OAuthScopes,
+          # which contains spaces, survives.
+          mapfile -t OVERRIDES < <(
+            aws cloudformation describe-stacks --stack-name "$STACK" \
+              --query 'Stacks[0].Parameters[].[ParameterKey,ParameterValue]' --output json \
+              | jq -r '.[] | "\(.[0])=\(.[1])"'
+          )
+
+          aws cloudformation deploy \
+            --template-file "infra/sam/.packaged-staging.yaml" \
+            --stack-name "$STACK" \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides "${OVERRIDES[@]}"
+
+      - name: The deployed server must answer with this tag
+        env:
+          MCP_URL: https://staging.mcp.cogdepot.com
+        run: |
+          set -euo pipefail
+          node scripts/assert-deployed-version.mjs "$MCP_URL" "${GITHUB_REF#refs/tags/v}"
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:lambda
+
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ vars.MCP_DEPLOY_ROLE_PRODUCTION }}
+          aws-region: us-east-1
+
+      - name: Package and deploy
+        env:
+          STACK: cogdepot-mcp-production
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+
+          aws cloudformation package \
+            --template-file infra/sam/template.yaml \
+            --s3-bucket "cogdepot-production-sam-artifacts-$ACCOUNT" \
+            --output-template-file "infra/sam/.packaged-production.yaml"
+
+          mapfile -t OVERRIDES < <(
+            aws cloudformation describe-stacks --stack-name "$STACK" \
+              --query 'Stacks[0].Parameters[].[ParameterKey,ParameterValue]' --output json \
+              | jq -r '.[] | "\(.[0])=\(.[1])"'
+          )
+
+          aws cloudformation deploy \
+            --template-file "infra/sam/.packaged-production.yaml" \
+            --stack-name "$STACK" \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides "${OVERRIDES[@]}"
+
+      - name: The deployed server must answer with this tag
+        env:
+          MCP_URL: https://mcp.cogdepot.com
+        run: |
+          set -euo pipefail
+          node scripts/assert-deployed-version.mjs "$MCP_URL" "${GITHUB_REF#refs/tags/v}"
