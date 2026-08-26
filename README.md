@@ -339,14 +339,26 @@ the deployment and the local runner drive the same web-standard `fetch` handler
 
 ### Deploying the remote server
 
-**Nothing in CI deploys it.** `publish.yml` fires on a `v*` tag and publishes the
-npm package and the registry entry; `release.yml` promotes `develop` to `main`.
-Neither touches the Lambda. That step is manual, and forgetting it is how the
-hosted server silently falls behind the published package - it served 0.3.0 while
-npm served 0.4.0, which is two releases of tool descriptions that no connector
-user ever saw.
+**`deploy.yml` does it, from the same `v*` tag that publishes the package.** It
+builds the bundle, updates the staging stack, asserts the deployed server answers
+with that tag, and only then does the same for production. A deploy that applies
+but does not change the running build fails the release rather than passing it.
 
-**Treat a release as unfinished until this has run.** The check is one request:
+It was manual until 0.5.0, and forgetting it is how the hosted server silently
+fell behind the published package: it served 0.3.0 while npm served 0.4.0, two
+releases of tool descriptions that no connector user ever saw. `npm run drift`
+now warns when the deployed version trails npm, as a backstop.
+
+`deploy.yml` needs a per-stage OIDC role trusting this repository's GitHub
+environment of the same name, defined in the cogDepot repository's
+`infra/terraform/modules/iam_mcp.tf`. Its ARN is read from the repository
+variables `MCP_DEPLOY_ROLE_STAGING` and `MCP_DEPLOY_ROLE_PRODUCTION` rather than
+written into the workflow, because it carries the AWS account id and this
+repository is public. The sub is pinned to `environment:<stage>` with no
+wildcards, so those environments' protection rules are the gate.
+
+**To deploy by hand** - a first-time stack, or a release whose deploy job failed
+- the same three steps run locally. Check what is live first:
 
 ```bash
 curl -s -X POST https://mcp.cogdepot.com -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"0"}}}'
