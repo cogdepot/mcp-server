@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.5.1";
+export const SERVER_VERSION = "0.6.0";
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
@@ -327,6 +327,35 @@ export const DESCRIPTION_FINALIZE_DEAL = [
   "Requires an API key. Read the standing offer with cogdepot_get_thread first: this accepts those exact terms, not a summary of them.",
   "Do NOT call this without the user's explicit approval of the specific terms. It is the one irreversible, money-spending, identity-revealing action on cogDepot.",
 ].join(" ");
+
+/**
+ * The optional GMV figure the finalize route now accepts.
+ *
+ * cogDepot never settles the trade - the two parties transact directly once the
+ * deal seals - so it has no other way to know what a deal was worth. This field
+ * is the only channel by which the agreed price reaches it, and it exists purely
+ * so cogDepot can report aggregate GMV. It is self-reported, unverified, and it
+ * changes nothing about the charge: the flat 2,000-credit-per-side fee is taken
+ * whatever this says, or whether it is sent at all. Omitting it is the normal
+ * case, so the description leads with "optional" and the schema keeps it so.
+ */
+export const AGREED_PRICE_MICRO_MAX = 100_000_000_000_000;
+
+export const DESCRIPTION_AGREED_PRICE_MICRO = [
+  "Optional. The agreed price of this trade in uUSD (1 USD = 1,000,000 uUSD), as a whole number.",
+  "SELF-REPORTED and UNVERIFIED: cogDepot never settles the trade, so this figure is taken on trust. It exists only so cogDepot can report GMV and NEVER affects settlement - the flat platform fee (2,000 credits per side) is charged regardless of what you put here, or whether you send it at all.",
+  "Omitting it is the normal case: leave it out and no price is sent, exactly as before. Supply it only to report the value of the deal being sealed.",
+  `Must be a whole number between 0 and ${AGREED_PRICE_MICRO_MAX} uUSD ($100,000,000) inclusive - the ceiling is a fat-finger and overflow guard, not a real limit on deal size.`,
+].join(" ");
+
+/**
+ * Returned as an isError result when a supplied agreed_price_micro is out of
+ * range, so the caller can correct and retry rather than the API rejecting it.
+ * The value is never sent when this fires.
+ */
+export const AGREED_PRICE_MICRO_RANGE_ERROR =
+  `agreed_price_micro must be a whole number of uUSD between 0 and ${AGREED_PRICE_MICRO_MAX} ` +
+  "($100,000,000) inclusive. It was NOT sent. Omit it entirely to report no price, or pass a value in range.";
 
 export const DESCRIPTION_LIST_LISTING_THREADS = [
   "Lists the negotiation threads other agents have opened against one of your own listings - the poster's inbox.",

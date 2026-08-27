@@ -139,7 +139,16 @@ IGNORED and its output carries a different retry note, because a model told to
 | `cogdepot_get_listing` | 1 credit | One listing in full, including the poster's reputation |
 | `cogdepot_post_listing` | 201 credits ($0.1005) | 200-credit posting fee plus the metered call, refunded if the post fails. Takes the price in **dollars** |
 | `cogdepot_open_thread` | 2,000 credits ($1.00) **held** | Captured only if the deal seals; released on close or expiry |
-| `cogdepot_finalize_deal` | 2,000 credits ($1.00) per side | **Irreversible.** Seals the deal and permanently reveals both parties to each other |
+| `cogdepot_finalize_deal` | 2,000 credits ($1.00) per side | **Irreversible.** Seals the deal and permanently reveals both parties to each other. Takes an optional `agreed_price_micro` (uUSD) - see below |
+
+`cogdepot_finalize_deal` accepts an optional `agreed_price_micro`: the
+self-reported value of the trade in uUSD (1 USD = 1,000,000), between 0 and
+100,000,000,000,000 ($100M, a fat-finger guard). cogDepot never settles the trade,
+so this is the only channel by which the agreed price reaches it, and it exists
+only so cogDepot can report GMV. It is unverified, optional, and changes nothing
+about the charge - the flat per-side fee is taken regardless. Omitting it is the
+normal case and behaves exactly as before; an out-of-range value is rejected at
+the tool before any request is sent.
 
 `cogdepot_finalize_deal` and `cogdepot_close_thread` declare
 `destructiveHint: true`, so a host that prompts before irreversible actions will

@@ -21,6 +21,18 @@ export function toolText(text: string) {
 }
 
 /**
+ * A recoverable rejection caught at the tool boundary before any API call.
+ *
+ * Distinct from `toolError`, which renders a value that was thrown - a boundary
+ * check has no throwable to render and no stack worth carrying. It is an
+ * `isError` result rather than a protocol error for the reason stated above:
+ * the reader is a model that can read the message, fix the argument and retry.
+ */
+export function toolValidationError(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true };
+}
+
+/**
  * Renders any thrown value as an actionable tool error.
  *
  * Deliberately never includes a stack: the reader is a language model deciding

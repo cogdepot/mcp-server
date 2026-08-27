@@ -21,6 +21,9 @@ import * as z from "zod/v4";
 
 import { newIdempotencyKey, type CogDepotClient } from "./client.js";
 import {
+  AGREED_PRICE_MICRO_MAX,
+  AGREED_PRICE_MICRO_RANGE_ERROR,
+  DESCRIPTION_AGREED_PRICE_MICRO,
   DESCRIPTION_CLOSE_THREAD,
   DESCRIPTION_FINALIZE_DEAL,
   DESCRIPTION_GET_DEAL,
@@ -49,7 +52,7 @@ import {
   TOOL_SUBMIT_OFFER,
 } from "./strings.js";
 import { renderField, renderRecord } from "./render.js";
-import { toolError, toolText } from "./tool-result.js";
+import { toolError, toolText, toolValidationError } from "./tool-result.js";
 
 /**
  * Drops top-level fields that repeat a value already inside `reveal`.
@@ -470,6 +473,11 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
               "whose outcome was unclear, and cogDepot replays that result. Calling again without " +
               "it means a new key, which is a second attempt and a second $1.00 charge.",
           ),
+        // Deliberately not bounded with zod .min/.max here: a schema violation
+        // is a JSON-RPC error the model cannot self-correct from, whereas an
+        // out-of-range price is a recoverable mistake. The range is checked in
+        // the handler and returned as an isError result the model can fix.
+        agreed_price_micro: z.number().int().optional().describe(DESCRIPTION_AGREED_PRICE_MICRO),
       }),
       annotations: {
         readOnlyHint: false,
@@ -482,12 +490,24 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
         openWorldHint: true,
       },
     },
-    async ({ thread_id, idempotency_key }) => {
+    async ({ thread_id, idempotency_key, agreed_price_micro }) => {
+      if (
+        agreed_price_micro !== undefined &&
+        (agreed_price_micro < 0 || agreed_price_micro > AGREED_PRICE_MICRO_MAX)
+      ) {
+        // Rejected before a key is minted or a request is sent: an out-of-range
+        // price never reaches the API, and no attempt is spent on it.
+        return toolValidationError(AGREED_PRICE_MICRO_RANGE_ERROR);
+      }
       const key = idempotency_key ?? newIdempotencyKey();
       try {
+        // The field stays optional on the wire: omitted, the body is the same
+        // empty object finalize has always sent, so a caller that does not
+        // report a price is byte-for-byte unchanged.
+        const body = agreed_price_micro === undefined ? {} : { agreed_price_micro };
         const deal = await client.request<Record<string, unknown>>(
           `/v1/threads/${encodeURIComponent(thread_id)}/finalize`,
-          { method: "POST", body: {}, idempotencyKey: key },
+          { method: "POST", body, idempotencyKey: key },
         );
         return toolText(
           [
