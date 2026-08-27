@@ -18,6 +18,12 @@ behaves exactly as it did in 0.5.1.
   a fat-finger and overflow guard) is rejected at the tool boundary as an isError
   result the model can correct, rather than being forwarded to the API.
 
+  Verified with a real finalize on staging (`e2e:staging`): the tool sent
+  `agreed_price_micro: 500000` on a genuine seal, the staging API accepted it and
+  sealed the deal, and the flat 2,000-credit-per-side fee was charged unchanged -
+  the field reached the live route without touching settlement. ("unverified"
+  above describes the value cogDepot takes on trust, not this check.)
+
 ## 0.5.1 - 2026-08-26
 
 **No runtime change.** `src/` is byte-identical to 0.5.0 and the tools behave
