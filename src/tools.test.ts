@@ -25,6 +25,7 @@ import {
   TOOL_SUBMIT_OFFER,
   TOOL_CLOSE_THREAD,
   TOOL_FINALIZE_DEAL,
+  AGREED_PRICE_MICRO_MAX,
 } from "./strings.js";
 
 const KEY = "test-key";
@@ -628,6 +629,86 @@ describe("keyed tools", () => {
 
     expect(isError).toBe(true);
     expect(text).toMatch(/Not found/i);
+    await close();
+  });
+
+  it("sends agreed_price_micro in the finalize body when the caller reports one", async () => {
+    // GMV is self-reported: cogDepot never settles the trade, so a price only
+    // reaches it if the tool forwards this optional field.
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/finalize": { status: 200, body: { id: "deal-1", reveal: {} } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+    const { isError } = await callText(client, TOOL_FINALIZE_DEAL, {
+      thread_id: "t1",
+      agreed_price_micro: 500_000,
+    });
+
+    expect(isError).toBe(false);
+    const body = String((fetchImpl.mock.calls.at(-1)?.[1] as RequestInit)?.body);
+    expect(JSON.parse(body)).toEqual({ agreed_price_micro: 500_000 });
+    await close();
+  });
+
+  it("sends no price field when the caller omits agreed_price_micro", async () => {
+    // Backward compatibility: an agent that never learned about the field must
+    // send the same empty body finalize has always sent.
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/finalize": { status: 200, body: { id: "deal-1", reveal: {} } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+    await callText(client, TOOL_FINALIZE_DEAL, { thread_id: "t1" });
+
+    const body = String((fetchImpl.mock.calls.at(-1)?.[1] as RequestInit)?.body);
+    expect(JSON.parse(body)).toEqual({});
+    expect(body).not.toContain("agreed_price_micro");
+    await close();
+  });
+
+  it("accepts a zero agreed_price_micro and forwards it rather than dropping it", async () => {
+    // Zero is a legitimate self-reported value (a free trade) and is distinct
+    // from omission, so the guard must not treat it as "not provided".
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/finalize": { status: 200, body: { id: "deal-1", reveal: {} } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+    await callText(client, TOOL_FINALIZE_DEAL, { thread_id: "t1", agreed_price_micro: 0 });
+
+    const body = String((fetchImpl.mock.calls.at(-1)?.[1] as RequestInit)?.body);
+    expect(JSON.parse(body)).toEqual({ agreed_price_micro: 0 });
+    await close();
+  });
+
+  it("rejects a negative or over-max agreed_price_micro at the boundary without calling the API", async () => {
+    const fetchImpl = routeFetch({
+      "cogdepot.json": { status: 200, body: DISCOVERY },
+      "/finalize": { status: 200, body: { id: "deal-1", reveal: {} } },
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const { client, close } = await connectWithKey();
+
+    for (const bad of [-1, AGREED_PRICE_MICRO_MAX + 1]) {
+      const { text, isError } = await callText(client, TOOL_FINALIZE_DEAL, {
+        thread_id: "t1",
+        agreed_price_micro: bad,
+      });
+      expect(isError, `${bad} must be rejected`).toBe(true);
+      expect(text).toMatch(/agreed_price_micro must be a whole number/);
+    }
+
+    // The price never reached the wire: no finalize request was made for either.
+    const finalizeCalls = fetchImpl.mock.calls.filter((c) => String(c[0]).includes("/finalize"));
+    expect(finalizeCalls).toHaveLength(0);
     await close();
   });
 });

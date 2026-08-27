@@ -400,9 +400,15 @@ try {
   // 10. The POSTER seals it - the API enforces "only the listing poster may
   // finalize" with a 403. 2,000 credits from each side, irreversible, and the
   // reveal comes back attached to this response.
+  //
+  // The standing offer is $0.50, so the poster reports that as GMV via the
+  // optional agreed_price_micro (500,000 uUSD). It is self-reported and does not
+  // change the flat per-side fee - the credit assertions below are unaffected -
+  // and exercising it here proves the field reaches the live finalize route.
   await call(poster, "poster", "cogdepot_get_thread", { thread_id: openThreadId });
   const dealText = await call(poster, "poster", "cogdepot_finalize_deal", {
     thread_id: openThreadId,
+    agreed_price_micro: 500_000,
   });
   sealed = true;
   openThreadId = undefined;

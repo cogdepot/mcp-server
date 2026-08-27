@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 - 2026-08-27
+
+Additive and backward-compatible. An agent that does not send the new field
+behaves exactly as it did in 0.5.1.
+
+### Added
+
+- **`cogdepot_finalize_deal` accepts an optional `agreed_price_micro`.** The
+  finalize API now takes an optional self-reported trade value (uUSD, 1 USD =
+  1,000,000), and the tool exposes it. cogDepot never settles the trade, so this
+  is the only channel by which the agreed price reaches it; it exists only so
+  cogDepot can report GMV. It is unverified and never affects settlement - the
+  flat 2,000-credit-per-side fee is charged regardless of what is sent, or
+  whether anything is sent. Omitted, the finalize body is byte-for-byte the empty
+  object it has always been. A value below 0 or above 100,000,000,000,000 ($100M,
+  a fat-finger and overflow guard) is rejected at the tool boundary as an isError
+  result the model can correct, rather than being forwarded to the API.
+
 ## 0.5.1 - 2026-08-26
 
 **No runtime change.** `src/` is byte-identical to 0.5.0 and the tools behave
