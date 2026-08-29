@@ -42,6 +42,17 @@ exactly as it did in 0.6.0.
   `https://acme.example/card.json?v=2` is refused as an isError result the model
   can correct, rather than forwarded to earn a 400 it has to decode.
 
+  Verified against the live staging route (`verify:route:staging`): the tool's
+  write reached the API, both fields read back from `/v1/account/profile`
+  unchanged, omitting them cleared both to null, and the account was restored to
+  the state it was found in. The Agent Card rules were probed underneath the
+  tool, straight at the API: all eight cases agree in both directions - the
+  well-known card path is accepted 204, while a query string, a fragment, a
+  trailing slash, http, localhost, a loopback and a private address are each
+  refused 400 invalid_input, exactly where the tool refuses them. An
+  unrecognised binding is refused 400 invalid_input rather than silently
+  dropped.
+
 ### Changed
 
 - **`cogdepot_get_deal` describes the two new reveal fields.** A reveal may now

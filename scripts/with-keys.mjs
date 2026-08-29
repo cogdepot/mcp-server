@@ -36,6 +36,10 @@ const ENVIRONMENTS = {
     allowsE2e: true,
     params: {
       smoke: { "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY" },
+      // Writes to the account this key owns, so it is offered on staging only.
+      // verify-route.mjs refuses production independently; this is the outer of
+      // the two gates, the same arrangement e2e already has.
+      "verify:route": { "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY" },
       e2e: {
         "/cogdepot/staging/mcp/e2e_poster_key": "COGDEPOT_E2E_POSTER_KEY",
         "/cogdepot/staging/mcp/e2e_negotiator_key": "COGDEPOT_E2E_NEGOTIATOR_KEY",

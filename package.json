@@ -44,6 +44,8 @@
     "serve:remote": "npm run build && node scripts/serve-remote.mjs",
     "build:lambda": "node scripts/build-lambda.mjs",
     "smoke:staging": "node scripts/with-keys.mjs staging smoke",
+    "verify:route": "npm run build && node scripts/verify-route.mjs",
+    "verify:route:staging": "node scripts/with-keys.mjs staging verify:route",
     "smoke:prod": "node scripts/with-keys.mjs prod smoke",
     "e2e": "npm run build && node scripts/e2e.mjs",
     "e2e:staging": "node scripts/with-keys.mjs staging e2e",

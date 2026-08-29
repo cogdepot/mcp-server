@@ -498,15 +498,23 @@ shell, committed here, or left in shell history:
 npm run smoke:staging
 ```
 
-`smoke:prod` and `e2e:staging` are the other two. `e2e:prod` does not exist and
-the runner refuses it, independently of the e2e script's own refusal.
+`smoke:prod`, `e2e:staging` and `verify:route:staging` are the others. `e2e:prod`
+does not exist and the runner refuses it, independently of the e2e script's own
+refusal; `verify:route` has no production form either, and refuses one twice over.
+
+`verify:route:staging` writes a protocol binding and Agent Card URL to the account
+the key owns, reads them back from `/v1/account/profile`, asserts that omitting
+them clears them, and restores the account to the state it was found in. It also
+probes the API's own Agent Card URL rules underneath the tool, because the tool
+refuses bad URLs before they reach the wire and the descriptions would otherwise
+be an untested claim about the server.
 
 Parameters follow the convention already used by cogDepot's Terraform,
 `/cogdepot/{env}/{component}/{name}`, with `mcp` as the component:
 
 | Parameter | Used by |
 |---|---|
-| `/cogdepot/staging/mcp/api_key` | `smoke:staging` |
+| `/cogdepot/staging/mcp/api_key` | `smoke:staging`, `verify:route:staging` |
 | `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
 | `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
 | `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod` (the pre-existing directory review account) |
