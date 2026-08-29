@@ -53,6 +53,19 @@ exactly as it did in 0.6.0.
   unrecognised binding is refused 400 invalid_input rather than silently
   dropped.
 
+- **`route-ready` reports whether a deployment has shipped the declaration.**
+  Read-only on every environment and keyless by default, so it can run against
+  production - which `verify:route` refuses, because that one writes. Production
+  is where the check matters: `DEFAULT_API_BASE_URL` is `https://api.cogdepot.com`,
+  so a release ships a tool aimed there, and an API that has not deployed the
+  fields ignores them, answers 204, and leaves the tool reporting a binding that
+  was never stored. Exit 1 is not-deployed, exit 2 is could-not-check, and the
+  two are never collapsed.
+
+  As of this release staging passes and **production does not**: production still
+  serves the single cogDepot-chosen `HTTPS_JSON` binding and neither new field,
+  confirmed against the live profile response as well as the spec.
+
 ### Changed
 
 - **`cogdepot_get_deal` describes the two new reveal fields.** A reveal may now

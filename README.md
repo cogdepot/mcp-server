@@ -502,6 +502,16 @@ npm run smoke:staging
 does not exist and the runner refuses it, independently of the e2e script's own
 refusal; `verify:route` has no production form either, and refuses one twice over.
 
+`route-ready:prod` is the counterpart, and the one that gates a release. It is
+READ-ONLY on every environment and needs no key: it reads `/openapi.json` and
+reports whether that deployment accepts, echoes and reveals the declaration.
+Production needs it precisely because `verify:route` refuses production, which
+would otherwise leave the deployment the published package points at by default
+as the only one nothing checks. Run it through `with-keys.mjs prod route-ready`
+to add a live profile read, which tests the served response rather than the
+spec's description of itself. Exit 1 means not deployed; exit 2 means the check
+could not run, which is a different answer and never collapsed into the first.
+
 `verify:route:staging` writes a protocol binding and Agent Card URL to the account
 the key owns, reads them back from `/v1/account/profile`, asserts that omitting
 them clears them, and restores the account to the state it was found in. It also
@@ -517,7 +527,7 @@ Parameters follow the convention already used by cogDepot's Terraform,
 | `/cogdepot/staging/mcp/api_key` | `smoke:staging`, `verify:route:staging` |
 | `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
 | `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
-| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod` (the pre-existing directory review account) |
+| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod`, `route-ready` on prod (the pre-existing directory review account) |
 
 The exact parameter names are declared per environment in `scripts/with-keys.mjs`
 rather than assembled from a prefix, because the two deployments diverge:
