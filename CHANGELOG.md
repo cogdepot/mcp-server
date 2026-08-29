@@ -62,6 +62,10 @@ exactly as it did in 0.6.0.
   was never stored. Exit 1 is not-deployed, exit 2 is could-not-check, and the
   two are never collapsed.
 
+  `publish.yml` runs it as a hard gate between the drift check and
+  `npm publish`, failing closed on a could-not-check as well as a not-deployed,
+  so this version cannot reach npm ahead of the API it depends on.
+
   As of this release staging passes and **production does not**: production still
   serves the single cogDepot-chosen `HTTPS_JSON` binding and neither new field,
   confirmed against the live profile response as well as the spec.

@@ -70,6 +70,29 @@ jobs:
         # useful moment to run them is immediately before publishing.
         run: npm run drift
 
+      - name: The production API must understand what this package sends
+        # Hard gate, and the only one here that looks at PRODUCTION rather than
+        # at this repository. DEFAULT_API_BASE_URL is https://api.cogdepot.com,
+        # so whatever is published points at production by default. cogDepot
+        # ignores unknown JSON fields, which makes the mismatch silent in the
+        # worst direction: a tool sending a field the deployment does not know
+        # gets a 204 and tells the operator their declaration was saved when
+        # nothing was stored.
+        #
+        # A staging run cannot answer this, and verify:route cannot either -
+        # that one writes, so it refuses production by design. This reads
+        # /openapi.json and nothing else, which is why it can run here.
+        #
+        # Fails closed on BOTH outcomes, unlike the same check run by hand:
+        # exit 1 is not-deployed, exit 2 is could-not-check, and neither is a
+        # basis for an irreversible publish. npm allows no free unpublish, so a
+        # release made on an unproven assumption is a deprecation notice
+        # forever - which is what 0.1.0 through 0.1.2 already are.
+        #
+        # Once production is ahead of the package this passes silently. It
+        # stays useful anyway: a production rollback would trip it again.
+        run: npm run route-ready:prod
+
       - name: Version must match the tag in all three places
         run: |
           set -euo pipefail

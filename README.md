@@ -580,3 +580,15 @@ gh workflow run release.yml --repo cogdepot/mcp-server -f version=1.0.0
 ```
 
 Omit `version` to promote without tagging.
+
+`publish.yml` will not publish against a production API that does not
+understand what the package sends. It runs `route-ready:prod` after the drift
+check and before `npm publish`, and fails closed on both a not-deployed answer
+and a could-not-check one. Neither is a basis for an irreversible publish: npm
+allows no free unpublish, so a release made on an unproven assumption is a
+deprecation notice forever, which is what 0.1.0 through 0.1.2 already are.
+
+The gate exists because the package points at production by default while the
+live write check refuses production, so nothing else looks there. When
+production is ahead of the package it passes silently, and it keeps earning its
+place: a production rollback trips it again.
