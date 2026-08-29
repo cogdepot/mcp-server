@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.7.0 - 2026-08-29
+
+Additive and backward-compatible. An agent that sends neither new field behaves
+exactly as it did in 0.6.0.
+
+### Added
+
+- **`cogdepot_update_profile` accepts an optional `route_protocol_binding` and
+  `agent_card_url`.** The route API now takes an operator-declared statement of
+  what answers at the deal route, and where the operator's A2A Agent Card is
+  published. `route_protocol_binding` is one of `JSONRPC` or `HTTP+JSON` (the two
+  A2A v1.0 bindings, spelled as A2A spells them) or
+  `https://cogdepot.com/bindings/webhook-v1`, a plain HTTPS webhook taking JSON
+  whose payload semantics the two parties agree during the negotiation - a
+  cogDepot identifier, not an A2A custom binding.
+
+  Only the operator can state this truthfully, and cogDepot will not assert it on
+  their behalf: omit the binding and a sealed counterparty's reveal carries no
+  interface descriptor at all, just the endpoint and operator contact. This
+  replaces the previous arrangement, where cogDepot declared a single
+  `HTTPS_JSON` binding for every route regardless of what was actually listening.
+
+  **Both fields are replace-on-write.** A route write replaces the whole
+  declaration, so omitting one clears any value stored earlier rather than
+  leaving it attached to a route it may no longer describe. The tool says so in
+  both field descriptions and in its success message, which names what was
+  declared - or states plainly that nothing was, and that anything set before is
+  now cleared.
+
+  `contact_name`, `contact_email` and `deal_route` are unchanged and still
+  required. The two new fields gate nothing: they never appear in the account's
+  `missing` list, and an undeclared binding costs the interface descriptor in a
+  counterparty's reveal, not the deal.
+
+  `agent_card_url` is validated at the tool boundary against rules stricter than
+  `https`, because the API enforces them and documents none of them: absolute
+  `https://` with no query string, no fragment and no trailing slash, and a host
+  that is not localhost or a loopback, link-local, private-range or unspecified
+  IP literal. `https://acme.example/.well-known/agent-card.json` passes;
+  `https://acme.example/card.json?v=2` is refused as an isError result the model
+  can correct, rather than forwarded to earn a 400 it has to decode.
+
+### Changed
+
+- **`cogdepot_get_deal` describes the two new reveal fields.** A reveal may now
+  carry `counterparty_interface` (what protocol to speak at the endpoint, present
+  only when that operator declared a binding) and `counterparty_agent_card_url`
+  (their Agent Card, when they published one). Where both appear the card is the
+  better source: it comes from the party that owns the endpoint rather than a
+  descriptor cogDepot relays. An absent descriptor means none was declared, never
+  that a default may be assumed. The existing wording - endpoint, deal-scoped
+  credentials and operator contact - was already true and is unchanged.
+
+
 ## 0.6.0 - 2026-08-27
 
 Additive and backward-compatible. An agent that does not send the new field

@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.6.0";
+export const SERVER_VERSION = "0.7.0";
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
@@ -198,6 +198,7 @@ export const DESCRIPTION_UPDATE_PROFILE = [
   "Requires an API key. Free - not metered.",
   "These are released to a counterparty ONLY after a deal seals, never before; cogDepot is anonymous until then.",
   "Until all three are set, opening and receiving negotiation threads is blocked. Call this when another tool reports the account is not set up.",
+  "Optionally declares what protocol answers at the route and where the operator's A2A Agent Card is published. Both are advisory - they gate nothing - but a route write replaces the whole declaration, so anything not passed is cleared.",
 ].join(" ");
 
 export const DESCRIPTION_GET_DOMAIN_CHALLENGE = [
@@ -220,6 +221,7 @@ export const DESCRIPTION_GET_THREAD = [
 
 export const DESCRIPTION_GET_DEAL = [
   "Returns a sealed deal, including the reveal package: the counterparty's endpoint, deal-scoped credentials and operator contact.",
+  "The reveal may also carry counterparty_interface (what protocol to speak at that endpoint, present only when the counterparty declared a binding) and counterparty_agent_card_url (their A2A Agent Card, when they published one). Prefer the card where both appear: it comes from the party that owns the endpoint rather than a descriptor cogDepot relays. An absent descriptor means the counterparty declared none, never that a default may be assumed.",
   "Requires an API key. Free - not metered.",
   "The record is purged 7 days after the deal seals, after which this returns not-found and only aggregate reputation survives. Retrieve and store the reveal promptly.",
 ].join(" ");
