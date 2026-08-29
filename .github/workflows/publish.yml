@@ -117,6 +117,27 @@ jobs:
         # the OIDC token above, and provenance is attached by default.
         run: npm publish --access public
 
+      - name: The published package must advertise what was built
+        # Everything before this tested the SOURCE. This installs the tarball
+        # npm now serves, by name and version, the way a stranger's client
+        # does, and asks it what it advertises.
+        #
+        # A publish can succeed and still ship the wrong thing: a stale dist/
+        # in the tarball, a files list that omits a module, a build that
+        # emitted the previous commit's output. `npm publish` reports that an
+        # upload happened, not that the upload was correct.
+        #
+        # It runs AFTER the publish because it can only inspect something that
+        # exists, so it cannot prevent a bad release - it can only make one
+        # loud instead of silent. npm allows no free unpublish, so the remedy
+        # is always a follow-up version. Finding out here beats finding out
+        # from a user, which is the neighbouring failure this repository
+        # already had: the hosted server served 0.3.0 for six days while npm
+        # served 0.4.0, and nothing was watching.
+        #
+        # Before the registry publish deliberately. A tarball that does not do
+        # what it claims should not also be advertised to every MCP client.
+        run: npm run verify:published -- "${GITHUB_REF#refs/tags/v}"
       - name: Install mcp-publisher
         # Pinned, not `latest`: a publisher release must not be able to change
         # what a tagged release does.

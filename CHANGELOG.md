@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+**No runtime change.** The package behaves exactly as 0.7.0 does; this is a
+release-pipeline guard.
+
+### Added
+
+- **`verify:published` checks the artefact npm actually serves.** Everything
+  else here tests the source. This installs the published tarball by name and
+  version, the way a stranger's client does, and asserts what it advertises:
+  its own reported version, both route-declaration fields on
+  `cogdepot_update_profile`, the binding enum, an unchanged required list, and
+  the two reveal fields named in `cogdepot_get_deal`.
+
+  `npm publish` reports that an upload happened, not that the upload was
+  correct. A stale `dist/`, a `files` list omitting a module, or a build
+  carrying the previous commit's output all publish cleanly. `publish.yml` runs
+  this after the npm publish and before the registry publish, so a tarball that
+  does not do what it claims is not also advertised to every MCP client. It
+  cannot block a release that already happened - it makes one loud instead of
+  silent, and the remedy is a follow-up version.
+
+  Verified against the live 0.7.0 on npm: all seven checks pass.
+
+# Changelog
+
 ## 0.7.0 - 2026-08-29
 
 Additive and backward-compatible. An agent that sends neither new field behaves

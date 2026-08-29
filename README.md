@@ -588,6 +588,14 @@ and a could-not-check one. Neither is a basis for an irreversible publish: npm
 allows no free unpublish, so a release made on an unproven assumption is a
 deprecation notice forever, which is what 0.1.0 through 0.1.2 already are.
 
+After `npm publish`, and before the registry publish, `publish.yml` runs
+`verify:published`. That installs the tarball npm now serves and asks it what it
+advertises, because a publish can succeed and still ship the wrong thing - a
+stale `dist/`, a `files` list that omits a module, a build carrying the previous
+commit's output. It cannot prevent a bad release, only make one loud instead of
+silent; npm allows no free unpublish, so the remedy is always a follow-up
+version. Run it by hand with `npm run verify:published [version]`.
+
 The gate exists because the package points at production by default while the
 live write check refuses production, so nothing else looks there. When
 production is ahead of the package it passes silently, and it keeps earning its
