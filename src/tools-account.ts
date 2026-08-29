@@ -34,6 +34,78 @@ import {
 import { renderRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
+/**
+ * The three protocol bindings an operator may declare for their deal route.
+ *
+ * Two are A2A v1.0 bindings, spelled the way A2A spells them. The third is a
+ * cogDepot identifier for a plain HTTPS webhook taking JSON, NOT an A2A custom
+ * binding - the URI resolves to its own spec page. Kept in the order the API
+ * documents them so a reader comparing the two sees the same list.
+ */
+const ROUTE_PROTOCOL_BINDINGS = [
+  "JSONRPC",
+  "HTTP+JSON",
+  "https://cogdepot.com/bindings/webhook-v1",
+] as const;
+
+/**
+ * Hostnames the API refuses in an Agent Card URL.
+ *
+ * A card is fetched by the COUNTERPARTY, from their network, so an address that
+ * only resolves on the declaring operator's machine cannot be reached and a
+ * private-range one points at whatever happens to sit at that address on the
+ * reader's network instead. The API rejects these; this repeats the rule at the
+ * boundary so the caller learns which field was wrong rather than reading a 400.
+ */
+function isUnreachableCardHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+
+  // URL.hostname KEEPS the brackets on an IPv6 literal ("[::1]", not "::1"),
+  // so they come off before any address comparison. Checked by test: the first
+  // version of this compared the bracketed form and passed every v6 address.
+  const ip6 = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (ip6 === "::1" || ip6 === "::") return true;
+  if (/^fe[89ab][0-9a-f]:/.test(ip6)) return true; // fe80::/10 link-local
+  if (/^f[cd][0-9a-f]{2}:/.test(ip6)) return true; // fc00::/7 unique-local
+
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!v4) return false;
+  const [a, b] = v4.slice(1).map(Number);
+  if (a === undefined || b === undefined) return false;
+  if (a === 0) return true; // 0.0.0.0/8 unspecified
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 10) return true; // 10.0.0.0/8 private
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
+  return false;
+}
+
+/**
+ * Whether a string satisfies every Agent Card URL rule the API enforces.
+ *
+ * Stricter than "an https URL", and deliberately so: the API refuses a query
+ * string, a fragment and a trailing slash as well. A normal card path such as
+ * https://acme.example/.well-known/agent-card.json satisfies all of it, while
+ * https://acme.example/card.json?v=2 does not. Checking here turns a 400 the
+ * caller has to decode into a schema message naming the field.
+ */
+export function isValidAgentCardUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  if (url.search !== "" || url.hash !== "") return false;
+  // A bare origin has pathname "/", which is a trailing slash and also not a
+  // card location, so it is refused by the same rule rather than a second one.
+  if (url.pathname.endsWith("/")) return false;
+  return !isUnreachableCardHost(url.hostname);
+}
+
 interface AccountResponse {
   readonly account_id?: string;
   readonly balance_micro?: number;
@@ -98,6 +170,42 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
           .startsWith("https://", "must be an https URL")
           .optional()
           .describe("Optional https contact URL"),
+        // Optional, and the cost of omitting it is the whole reason it exists:
+        // only the operator can say what answers at their own endpoint, so
+        // cogDepot will not assert one on their behalf.
+        route_protocol_binding: z
+          .enum(ROUTE_PROTOCOL_BINDINGS)
+          .optional()
+          .describe(
+            "Optional. What protocol answers at your deal_route, and the one thing only you can " +
+              "state truthfully. JSONRPC = an A2A v1.0 JSON-RPC endpoint answers there. " +
+              "HTTP+JSON = an A2A v1.0 HTTP+JSON/REST endpoint. " +
+              "https://cogdepot.com/bindings/webhook-v1 = a plain HTTPS webhook taking JSON, whose " +
+              "payload semantics you and the counterparty agree during the negotiation (a cogDepot " +
+              "identifier, NOT an A2A custom binding). Omit it and your counterparty's reveal " +
+              "carries NO interface descriptor at all - just your endpoint and operator contact - " +
+              "rather than a protocol claim you never made. REPLACE-ON-WRITE: this call rewrites " +
+              "the whole route declaration, so omitting it CLEARS any binding set earlier.",
+          ),
+        agent_card_url: z
+          .string()
+          .refine(isValidAgentCardUrl, {
+            message:
+              "must be an absolute https URL with no query string, no fragment and no trailing " +
+              "slash, and not a localhost or loopback/link-local/private/unspecified address",
+          })
+          .optional()
+          .describe(
+            "Optional. Where your A2A Agent Card is published. Revealed to a sealed counterparty " +
+              "as counterparty_agent_card_url so their client reads supportedInterfaces and " +
+              "securitySchemes from you directly instead of relying on cogDepot's relayed " +
+              "descriptor. STRICTER THAN https: absolute https:// with NO query string, NO " +
+              "fragment and NO trailing slash, and the host may not be localhost or a loopback, " +
+              "link-local, private-range or unspecified IP literal. " +
+              "https://acme.example/.well-known/agent-card.json is valid; " +
+              "https://acme.example/card.json?v=2 is not. REPLACE-ON-WRITE: omitting it CLEARS " +
+              "any card URL set earlier.",
+          ),
       }),
       annotations: {
         readOnlyHint: false,
@@ -106,7 +214,14 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
         openWorldHint: true,
       },
     },
-    async ({ contact_name, contact_email, deal_route, contact_url }) => {
+    async ({
+      contact_name,
+      contact_email,
+      deal_route,
+      contact_url,
+      route_protocol_binding,
+      agent_card_url,
+    }) => {
       // Two endpoints, one tool. They cannot be written atomically, so the
       // partial outcome has to be reported rather than hidden: if the contact
       // write lands and the route write fails, a bare error would tell the
@@ -125,14 +240,39 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
         });
         contactWritten = true;
 
+        // The route write REPLACES the whole declaration, so an undeclared
+        // field is sent as absent rather than as null: that is what clears it,
+        // and it is the same thing the caller omitting the argument asked for.
         await client.request("/v1/account/route", {
           method: "PUT",
-          body: { deal_route },
+          body: {
+            deal_route,
+            ...(route_protocol_binding === undefined ? {} : { route_protocol_binding }),
+            ...(agent_card_url === undefined ? {} : { agent_card_url }),
+          },
         });
+
+        // Naming what was NOT declared matters more than confirming what was:
+        // the route write just replaced the whole declaration, so a caller who
+        // set a binding on an earlier call and omitted it here has silently
+        // cleared it. Saying so is the only warning they get.
+        const declared = [
+          route_protocol_binding === undefined
+            ? undefined
+            : `protocol binding ${route_protocol_binding}`,
+          agent_card_url === undefined ? undefined : `agent card ${agent_card_url}`,
+        ].filter((part): part is string => part !== undefined);
 
         return toolText(
           "Profile updated. Contact details and deal route are stored and will be released to a " +
-            "counterparty only after a deal seals. Opening and receiving threads is now unblocked.",
+            "counterparty only after a deal seals. Opening and receiving threads is now " +
+            "unblocked.\n\n" +
+            (declared.length > 0
+              ? `Route declaration: ${declared.join(", ")}.`
+              : "No protocol binding or agent card was declared, so a sealed counterparty " +
+                "receives your endpoint and contact with no interface descriptor.") +
+            " A route write replaces the whole declaration, so anything not passed here is now " +
+            "cleared.",
         );
       } catch (error) {
         const partial = toolError(error);

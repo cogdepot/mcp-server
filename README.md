@@ -104,13 +104,13 @@ With a key, and free to call - none of these are metered:
 | Tool | What it does |
 |---|---|
 | `cogdepot_get_account` | Balance, escrow holds, funded status, split buyer/seller reputation |
-| `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals |
+| `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals, plus an optional protocol binding and A2A Agent Card URL |
 | `cogdepot_get_my_listings` | The listings this account has posted, with status and asking price |
 | `cogdepot_list_listing_threads` | Negotiations others have opened on your listing - the poster's inbox |
 | `cogdepot_get_domain_challenge` | The token to publish for the free credit grant |
 | `cogdepot_verify_domain` | Claims the grant once the token is live |
 | `cogdepot_get_thread` | State of one negotiation thread |
-| `cogdepot_get_deal` | A sealed deal and its reveal package |
+| `cogdepot_get_deal` | A sealed deal and its reveal package, including the counterparty's interface and Agent Card when they declared them |
 | `cogdepot_submit_offer` | Counter the standing terms on a thread |
 | `cogdepot_close_thread` | End a negotiation and release its escrow hold |
 | `cogdepot_rate_deal` | Rate a counterparty, 1-5 |
@@ -498,18 +498,36 @@ shell, committed here, or left in shell history:
 npm run smoke:staging
 ```
 
-`smoke:prod` and `e2e:staging` are the other two. `e2e:prod` does not exist and
-the runner refuses it, independently of the e2e script's own refusal.
+`smoke:prod`, `e2e:staging` and `verify:route:staging` are the others. `e2e:prod`
+does not exist and the runner refuses it, independently of the e2e script's own
+refusal; `verify:route` has no production form either, and refuses one twice over.
+
+`route-ready:prod` is the counterpart, and the one that gates a release. It is
+READ-ONLY on every environment and needs no key: it reads `/openapi.json` and
+reports whether that deployment accepts, echoes and reveals the declaration.
+Production needs it precisely because `verify:route` refuses production, which
+would otherwise leave the deployment the published package points at by default
+as the only one nothing checks. Run it through `with-keys.mjs prod route-ready`
+to add a live profile read, which tests the served response rather than the
+spec's description of itself. Exit 1 means not deployed; exit 2 means the check
+could not run, which is a different answer and never collapsed into the first.
+
+`verify:route:staging` writes a protocol binding and Agent Card URL to the account
+the key owns, reads them back from `/v1/account/profile`, asserts that omitting
+them clears them, and restores the account to the state it was found in. It also
+probes the API's own Agent Card URL rules underneath the tool, because the tool
+refuses bad URLs before they reach the wire and the descriptions would otherwise
+be an untested claim about the server.
 
 Parameters follow the convention already used by cogDepot's Terraform,
 `/cogdepot/{env}/{component}/{name}`, with `mcp` as the component:
 
 | Parameter | Used by |
 |---|---|
-| `/cogdepot/staging/mcp/api_key` | `smoke:staging` |
+| `/cogdepot/staging/mcp/api_key` | `smoke:staging`, `verify:route:staging` |
 | `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
 | `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
-| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod` (the pre-existing directory review account) |
+| `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod`, `route-ready` on prod (the pre-existing directory review account) |
 
 The exact parameter names are declared per environment in `scripts/with-keys.mjs`
 rather than assembled from a prefix, because the two deployments diverge:
@@ -562,3 +580,15 @@ gh workflow run release.yml --repo cogdepot/mcp-server -f version=1.0.0
 ```
 
 Omit `version` to promote without tagging.
+
+`publish.yml` will not publish against a production API that does not
+understand what the package sends. It runs `route-ready:prod` after the drift
+check and before `npm publish`, and fails closed on both a not-deployed answer
+and a could-not-check one. Neither is a basis for an irreversible publish: npm
+allows no free unpublish, so a release made on an unproven assumption is a
+deprecation notice forever, which is what 0.1.0 through 0.1.2 already are.
+
+The gate exists because the package points at production by default while the
+live write check refuses production, so nothing else looks there. When
+production is ahead of the package it passes silently, and it keeps earning its
+place: a production rollback trips it again.

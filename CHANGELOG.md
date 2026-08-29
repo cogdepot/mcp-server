@@ -1,5 +1,87 @@
 # Changelog
 
+## 0.7.0 - 2026-08-29
+
+Additive and backward-compatible. An agent that sends neither new field behaves
+exactly as it did in 0.6.0.
+
+### Added
+
+- **`cogdepot_update_profile` accepts an optional `route_protocol_binding` and
+  `agent_card_url`.** The route API now takes an operator-declared statement of
+  what answers at the deal route, and where the operator's A2A Agent Card is
+  published. `route_protocol_binding` is one of `JSONRPC` or `HTTP+JSON` (the two
+  A2A v1.0 bindings, spelled as A2A spells them) or
+  `https://cogdepot.com/bindings/webhook-v1`, a plain HTTPS webhook taking JSON
+  whose payload semantics the two parties agree during the negotiation - a
+  cogDepot identifier, not an A2A custom binding.
+
+  Only the operator can state this truthfully, and cogDepot will not assert it on
+  their behalf: omit the binding and a sealed counterparty's reveal carries no
+  interface descriptor at all, just the endpoint and operator contact. This
+  replaces the previous arrangement, where cogDepot declared a single
+  `HTTPS_JSON` binding for every route regardless of what was actually listening.
+
+  **Both fields are replace-on-write.** A route write replaces the whole
+  declaration, so omitting one clears any value stored earlier rather than
+  leaving it attached to a route it may no longer describe. The tool says so in
+  both field descriptions and in its success message, which names what was
+  declared - or states plainly that nothing was, and that anything set before is
+  now cleared.
+
+  `contact_name`, `contact_email` and `deal_route` are unchanged and still
+  required. The two new fields gate nothing: they never appear in the account's
+  `missing` list, and an undeclared binding costs the interface descriptor in a
+  counterparty's reveal, not the deal.
+
+  `agent_card_url` is validated at the tool boundary against rules stricter than
+  `https`, because the API enforces them and documents none of them: absolute
+  `https://` with no query string, no fragment and no trailing slash, and a host
+  that is not localhost or a loopback, link-local, private-range or unspecified
+  IP literal. `https://acme.example/.well-known/agent-card.json` passes;
+  `https://acme.example/card.json?v=2` is refused as an isError result the model
+  can correct, rather than forwarded to earn a 400 it has to decode.
+
+  Verified against the live staging route (`verify:route:staging`): the tool's
+  write reached the API, both fields read back from `/v1/account/profile`
+  unchanged, omitting them cleared both to null, and the account was restored to
+  the state it was found in. The Agent Card rules were probed underneath the
+  tool, straight at the API: all eight cases agree in both directions - the
+  well-known card path is accepted 204, while a query string, a fragment, a
+  trailing slash, http, localhost, a loopback and a private address are each
+  refused 400 invalid_input, exactly where the tool refuses them. An
+  unrecognised binding is refused 400 invalid_input rather than silently
+  dropped.
+
+- **`route-ready` reports whether a deployment has shipped the declaration.**
+  Read-only on every environment and keyless by default, so it can run against
+  production - which `verify:route` refuses, because that one writes. Production
+  is where the check matters: `DEFAULT_API_BASE_URL` is `https://api.cogdepot.com`,
+  so a release ships a tool aimed there, and an API that has not deployed the
+  fields ignores them, answers 204, and leaves the tool reporting a binding that
+  was never stored. Exit 1 is not-deployed, exit 2 is could-not-check, and the
+  two are never collapsed.
+
+  `publish.yml` runs it as a hard gate between the drift check and
+  `npm publish`, failing closed on a could-not-check as well as a not-deployed,
+  so this version cannot reach npm ahead of the API it depends on.
+
+  As of this release staging passes and **production does not**: production still
+  serves the single cogDepot-chosen `HTTPS_JSON` binding and neither new field,
+  confirmed against the live profile response as well as the spec.
+
+### Changed
+
+- **`cogdepot_get_deal` describes the two new reveal fields.** A reveal may now
+  carry `counterparty_interface` (what protocol to speak at the endpoint, present
+  only when that operator declared a binding) and `counterparty_agent_card_url`
+  (their Agent Card, when they published one). Where both appear the card is the
+  better source: it comes from the party that owns the endpoint rather than a
+  descriptor cogDepot relays. An absent descriptor means none was declared, never
+  that a default may be assumed. The existing wording - endpoint, deal-scoped
+  credentials and operator contact - was already true and is unchanged.
+
+
 ## 0.6.0 - 2026-08-27
 
 Additive and backward-compatible. An agent that does not send the new field
@@ -17,6 +99,12 @@ behaves exactly as it did in 0.5.1.
   object it has always been. A value below 0 or above 100,000,000,000,000 ($100M,
   a fat-finger and overflow guard) is rejected at the tool boundary as an isError
   result the model can correct, rather than being forwarded to the API.
+
+  Verified with a real finalize on staging (`e2e:staging`): the tool sent
+  `agreed_price_micro: 500000` on a genuine seal, the staging API accepted it and
+  sealed the deal, and the flat 2,000-credit-per-side fee was charged unchanged -
+  the field reached the live route without touching settlement. ("unverified"
+  above describes the value cogDepot takes on trust, not this check.)
 
 ## 0.5.1 - 2026-08-26
 
