@@ -52,8 +52,8 @@ version:
 
 | Where it runs | `User-Agent` |
 |---|---|
-| the package on your own machine | `cogdepot-mcp/0.7.1` |
-| the hosted server at `mcp.cogdepot.com` | `cogdepot-mcp-remote/0.7.1` |
+| the package on your own machine | `cogdepot-mcp/<version>` |
+| the hosted server at `mcp.cogdepot.com` | `cogdepot-mcp-remote/<version>` |
 | either, under continuous integration (`CI` is set) | the same, with ` (ci)` appended |
 
 The version is the package version, so it changes with each release.

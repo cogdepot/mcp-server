@@ -33,6 +33,29 @@ difference on the wire is one extra request header.
   The hosted server sends its own `User-Agent` and never forwards the inbound
   MCP client's, so a caller's identity does not travel onward to the API.
 
+- **One command bumps the version, and one asserts it did not drift.**
+  `npm run bump -- patch|minor|major|1.2.3` writes all six places this package
+  states its version - `package.json`, both fields in `package-lock.json`, both
+  in `server.json`, and `SERVER_VERSION` in `src/strings.ts`.
+  `npm run version:check` asserts they agree and names the ones that do not.
+
+  Nothing reconciled those six before, so a hand bump updated the ones the
+  bumper remembered, and both directions have cost a release. `SERVER_VERSION`
+  sat at 0.1.0 through 0.1.1 and 0.1.2, so every client was told the wrong
+  version by the one field a client can see. `package-lock.json` then sat at
+  0.3.0 through four releases, because the publish workflow checks three files
+  against the git tag and the lock is not one of them.
+
+  `version:check` now runs inside `verify` and `verify:local`, and
+  `prepublishOnly` runs `verify`, so a drifted tree cannot reach npm.
+  `src/version.test.ts` asserts the same invariant in the test suite, reading
+  the carrier list out of `scripts/version.mjs` so the guard and the tool that
+  fixes a failure cannot disagree about what a carrier is.
+
+  A version at or below the current one is refused unless `--force` is passed,
+  because npm allows no republish. `--dry-run` reports the change without
+  writing.
+
 - **`verify:published` checks the artefact npm actually serves.** Everything
   else here tests the source. This installs the published tarball by name and
   version, the way a stranger's client does, and asserts what it advertises:
@@ -49,6 +72,13 @@ difference on the wire is one extra request header.
   silent, and the remedy is a follow-up version.
 
   Verified against the live 0.7.0 on npm: all seven checks pass.
+
+### Fixed
+
+- **`package-lock.json` said 0.3.0.** It had drifted four releases behind and
+  nothing checked it, because the publish workflow compares the git tag against
+  `package.json` and `server.json` only. Corrected to the released version;
+  `version:check` above is what keeps it there.
 
 ## 0.7.0 - 2026-08-29
 

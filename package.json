@@ -54,8 +54,10 @@
     "e2e": "npm run build && node scripts/e2e.mjs",
     "e2e:staging": "node scripts/with-keys.mjs staging e2e",
     "drift": "node scripts/drift.mjs",
-    "verify": "npm run typecheck && npm run coverage && npm run smoke",
-    "verify:local": "npm run typecheck && npm run test && node scripts/offline-ok.mjs drift smoke",
+    "version:check": "node scripts/version.mjs check",
+    "bump": "node scripts/version.mjs",
+    "verify": "npm run version:check && npm run typecheck && npm run coverage && npm run smoke",
+    "verify:local": "npm run version:check && npm run typecheck && npm run test && node scripts/offline-ok.mjs drift smoke",
     "prepublishOnly": "npm run verify"
   },
   "dependencies": {

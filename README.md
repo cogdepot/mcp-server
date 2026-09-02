@@ -580,6 +580,66 @@ git config --local user.email akashy@cogdepot.com
 
 ## Releases
 
+### Bumping the version
+
+This package states its version in **six places across four files**, and they
+are not redundant - each is read by something different:
+
+| File | Field | Read by |
+|---|---|---|
+| `package.json` | `version` | npm |
+| `package-lock.json` | `version`, `packages[""].version` | `npm ci` |
+| `server.json` | `version`, `packages[0].version` | the MCP registry |
+| `src/strings.ts` | `SERVER_VERSION` | an MCP client, over the protocol in `serverInfo` |
+
+Nothing reconciles them on its own, so a hand bump updates the ones the bumper
+remembers. Both directions have already cost a release: `SERVER_VERSION` sat at
+0.1.0 through 0.1.1 and 0.1.2, so every client was told the wrong version by the
+one field a client can actually see; `package-lock.json` then sat at 0.3.0
+through four releases, because no check covered it at all.
+
+One command sets all six:
+
+```bash
+npm run bump -- patch
+```
+
+`minor`, `major` and an explicit `1.2.3` all work. Add `--dry-run` to see the
+change without writing. A version at or below the current one is refused unless
+you pass `--force`, because npm allows no republish and a tree numbered below
+what is already released can never be published.
+
+One command asserts all six agree:
+
+```bash
+npm run version:check
+```
+
+That check is the load-bearing half. It runs inside `verify` and
+`verify:local`, and `prepublishOnly` runs `verify`, so a drifted tree cannot
+reach npm. `src/version.test.ts` asserts the same invariant from the test
+suite, reading the carrier list out of `scripts/version.mjs` so the guard and
+the tool that fixes it cannot disagree about what a carrier is.
+
+The bump is deliberately not `npm version`: that command knows only
+`package.json` and commits and tags as a side effect, which would put a tag on
+the tree before the other three files and the CHANGELOG entry were written. It
+is also deliberately offline - ask npm what is already live first, then bump
+past it:
+
+```bash
+npm view @cogdepot/mcp-server version
+```
+
+Writing the CHANGELOG entry, and updating `PRIVACY.md` when what the package
+transmits has changed, stay manual. A script should not guess at either.
+
+```bash
+npm run verify:local
+```
+
+### Promoting and tagging
+
 `main` requires a pull request and passing checks, with no bypass actors. It is
 reached only through the `release` workflow, which authenticates as the
 `cogdepot-bot` GitHub App so the public release trail is not a personal account.
