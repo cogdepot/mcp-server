@@ -427,9 +427,10 @@ error surfaces there rather than on the name agents are connected to.
 
 ```bash
 npm install
-npm run verify:local  # typecheck, unit tests, and the networked guards below
-npm run verify        # typecheck, unit tests with a 95% coverage floor, and a smoke test
+npm run verify:local  # version check, typecheck, unit tests, and the networked guards below
+npm run verify        # version check, typecheck, unit tests with a 95% coverage floor, and a smoke test
 npm run drift         # fails if the API grew an endpoint no tool covers
+npm run version:check # fails if the six version carriers disagree (see Releases)
 ```
 
 `verify:local` is the one to run before pushing, and it exists because of a
