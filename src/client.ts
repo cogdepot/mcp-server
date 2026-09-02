@@ -10,7 +10,7 @@
 import { ApiError, asProblem, describeProblem } from "./errors.js";
 import { getFacts } from "./facts.js";
 import { getApiBaseUrl } from "./config.js";
-import { REQUEST_TIMEOUT_MS } from "./strings.js";
+import { REQUEST_TIMEOUT_MS, USER_AGENT } from "./strings.js";
 
 /**
  * How the client authenticates to cogDepot.
@@ -88,20 +88,29 @@ export class CogDepotClient {
   readonly #credential: Credential | undefined;
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
+  readonly #userAgent: string;
 
   /**
    * A bare string first argument is an API key, so every existing
    * `new CogDepotClient(key)` caller is unchanged. A Credential selects the
    * header explicitly - the remote OAuth path passes a `bearer`.
+   *
+   * `userAgent` is a parameter rather than a module constant because the hosted
+   * server must be separable from local installs in cogDepot's logs and runs
+   * this same shared code. Passing it explicitly means a process announces what
+   * its entrypoint says it is; there is no environment variable a local run
+   * could set to claim it is the hosted deployment.
    */
   constructor(
     credential?: string | Credential,
     baseUrl: string = getApiBaseUrl(),
     fetchImpl: typeof fetch = fetch,
+    userAgent: string = USER_AGENT,
   ) {
     this.#credential = normalizeCredential(credential);
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
     this.#fetch = fetchImpl;
+    this.#userAgent = userAgent;
   }
 
   get hasKey(): boolean {
@@ -119,7 +128,14 @@ export class CogDepotClient {
     if (!this.#credential) throw new MissingApiKeyError();
 
     const method = options.method ?? "GET";
-    const headers: Record<string, string> = { accept: "application/json" };
+    // Node's fetch sends a default User-Agent of "node" only when none is set,
+    // so setting ours here replaces it outright - nothing needs deleting. That
+    // default was indistinguishable from cogDepot's own storefront SSR, which is
+    // why no measurement run could attribute a tool call to this package.
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      "user-agent": this.#userAgent,
+    };
     // The one place the two credential kinds diverge: an API key travels in
     // x-api-key, a relayed Cognito access token in Authorization: Bearer. Both
     // resolve to an account on the cogDepot side.

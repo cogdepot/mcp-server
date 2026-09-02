@@ -36,6 +36,7 @@ import {
   REQUEST_TIMEOUT_MS,
   TITLE_GET_REPUTATION,
   TOOL_GET_REPUTATION,
+  USER_AGENT,
 } from "./strings.js";
 import { toolError, toolText } from "./tool-result.js";
 
@@ -133,13 +134,16 @@ function renderReputation(handle: string, body: Record<string, unknown>): string
 }
 
 /** Fetches the public record. No credentials are attached, by design. */
-async function fetchReputation(handle: string): Promise<Record<string, unknown>> {
+async function fetchReputation(
+  handle: string,
+  userAgent: string = USER_AGENT,
+): Promise<Record<string, unknown>> {
   const url = `${getApiBaseUrl()}/v1/reputation/${encodeURIComponent(handle)}`;
 
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", "user-agent": userAgent },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -199,7 +203,7 @@ async function fetchReputation(handle: string): Promise<Record<string, unknown>>
  * credit. The hints drive host auto-permissions, so the distinction is load
  * bearing rather than decorative.
  */
-export function registerReputationTool(server: McpServer): void {
+export function registerReputationTool(server: McpServer, userAgent: string = USER_AGENT): void {
   server.registerTool(
     TOOL_GET_REPUTATION,
     {
@@ -234,7 +238,7 @@ export function registerReputationTool(server: McpServer): void {
             false,
           );
         }
-        return toolText(renderReputation(normalised, await fetchReputation(normalised)));
+        return toolText(renderReputation(normalised, await fetchReputation(normalised, userAgent)));
       } catch (error) {
         return toolError(error);
       }

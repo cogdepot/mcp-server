@@ -48,6 +48,7 @@ import {
   OAUTH_PROTECTED_RESOURCE_PATH,
   OAUTH_TOKEN_PATH,
   REMOTE_API_KEY_HEADER,
+  REMOTE_USER_AGENT,
 } from "./strings.js";
 
 /**
@@ -80,7 +81,11 @@ export function apiKeyFromRequest(request: Request): string | undefined {
  * not an error.
  */
 export function buildServerForRequest(request: Request | undefined) {
-  return buildServer(request ? apiKeyFromRequest(request) : undefined);
+  // REMOTE_USER_AGENT, not the local default: this process is mcp.cogdepot.com
+  // serving many callers, and counting it as an install would overstate one
+  // number and hide the other. The inbound caller's own user-agent is never
+  // forwarded - only the credential is read off the request.
+  return buildServer(request ? apiKeyFromRequest(request) : undefined, REMOTE_USER_AGENT);
 }
 
 /**
@@ -116,7 +121,11 @@ export function createRemoteHandler(): McpHttpHandler {
   // request the gate lets through without a token carries no authInfo and builds
   // the keyless server.
   const inner = createMcpHandler(
-    (ctx) => buildServer(ctx.authInfo ? { kind: "bearer", value: ctx.authInfo.token } : undefined),
+    (ctx) =>
+      buildServer(
+        ctx.authInfo ? { kind: "bearer", value: ctx.authInfo.token } : undefined,
+        REMOTE_USER_AGENT,
+      ),
     HANDLER_OPTIONS,
   );
   return gateWithOAuth(inner, oauth, createCognitoVerifier(oauth));
@@ -165,7 +174,9 @@ export function gateWithOAuth(
   const upstreamDiscovery = async (): Promise<Record<string, unknown> | undefined> => {
     if (upstreamDiscoveryCache) return upstreamDiscoveryCache;
     try {
-      const res = await fetch(`${config.issuer}/.well-known/openid-configuration`);
+      const res = await fetch(`${config.issuer}/.well-known/openid-configuration`, {
+        headers: { "user-agent": REMOTE_USER_AGENT },
+      });
       if (!res.ok) return undefined;
       upstreamDiscoveryCache = (await res.json()) as Record<string, unknown>;
       return upstreamDiscoveryCache;
@@ -324,7 +335,13 @@ function jsonResponse(body: unknown, status: number): Response {
  */
 async function proxyToken(tokenEndpoint: string, request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type") ?? "application/x-www-form-urlencoded";
-  const headers: Record<string, string> = { "content-type": contentType };
+  // Our own User-Agent, deliberately: the inbound client's headers are not
+  // copied here (only content-type and the client's own Authorization are), so
+  // nothing of the caller's identity leaks upstream and Cognito sees the proxy.
+  const headers: Record<string, string> = {
+    "content-type": contentType,
+    "user-agent": REMOTE_USER_AGENT,
+  };
   const authorization = request.headers.get("authorization");
   if (authorization) headers["authorization"] = authorization;
 

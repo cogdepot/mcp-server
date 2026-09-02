@@ -1,11 +1,37 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 - 2026-09-02
 
-**No runtime change.** The package behaves exactly as 0.7.0 does; this is a
-release-pipeline guard.
+Additive and backward-compatible. No tool, schema or behaviour changes; the only
+difference on the wire is one extra request header.
 
 ### Added
+
+- **Every outbound request now identifies itself with a `User-Agent`.** The
+  local package sends `cogdepot-mcp/<version>`, the hosted server at
+  `mcp.cogdepot.com` sends `cogdepot-mcp-remote/<version>`, and either appends
+  ` (ci)` when the `CI` environment variable is set.
+
+  Until now this package sent Node's default `node`. That is byte-identical to
+  what cogDepot's own storefront server-side rendering sends, so three
+  consecutive server-side measurement runs could not attribute a single tool
+  call - MCP traffic and page renders were the same string from the same
+  hosts. The version is in the header so a log line names a release without a
+  second lookup, and the hosted variant is separate because one shared process
+  serving many callers says nothing about how many installs exist.
+
+  The ` (ci)` marker exists for a specific contamination: GitHub Actions sets
+  `CI`, and cogDepot's own pr-checks workflow exercises this package from
+  Azure-range runners. Those bursts polluted the 2026-08-22 measurement and are
+  now separable from real use.
+
+  The header names the software and its version only. It carries no account
+  identifier, no user data, and nothing that distinguishes one install from
+  another. `PRIVACY.md` gains a "Software identification" section stating
+  exactly that, and its "what it sends" table now enumerates the header.
+
+  The hosted server sends its own `User-Agent` and never forwards the inbound
+  MCP client's, so a caller's identity does not travel onward to the API.
 
 - **`verify:published` checks the artefact npm actually serves.** Everything
   else here tests the source. This installs the published tarball by name and
@@ -23,8 +49,6 @@ release-pipeline guard.
   silent, and the remedy is a follow-up version.
 
   Verified against the live 0.7.0 on npm: all seven checks pass.
-
-# Changelog
 
 ## 0.7.0 - 2026-08-29
 

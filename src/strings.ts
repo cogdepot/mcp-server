@@ -8,7 +8,35 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.7.0";
+export const SERVER_VERSION = "0.7.1";
+
+/**
+ * The User-Agent every outbound request from this package carries.
+ *
+ * Until 0.7.1 this package sent Node's default `node`, which is byte-identical
+ * to what cogDepot's own storefront SSR sends: three measurement runs in a row
+ * could not attribute a single tool call. The version is part of the string so
+ * server-side logs can tell which release produced a call without a second
+ * lookup.
+ *
+ * The `(ci)` marker is not cosmetic. GitHub Actions sets CI=true, and cogDepot's
+ * pr-checks workflow exercises this package from Azure-range runners; those
+ * bursts polluted the 2026-08-22 measurement and are now separable from real
+ * installs. Evaluated once at module load, which is correct for both the CLI
+ * (one process per session) and the Lambda (one process per container).
+ */
+export const USER_AGENT = `cogdepot-mcp/${SERVER_VERSION}${process.env.CI ? " (ci)" : ""}`;
+
+/**
+ * The User-Agent the hosted server (mcp.cogdepot.com) sends instead.
+ *
+ * Traffic from the hosted deployment is one shared process serving many callers,
+ * so it says nothing about how many installs exist - counting it alongside local
+ * installs would overstate one and hide the other. Passed explicitly from the
+ * remote entrypoint rather than sniffed from the environment, so a local process
+ * can never accidentally claim to be the hosted one.
+ */
+export const REMOTE_USER_AGENT = `cogdepot-mcp-remote/${SERVER_VERSION}${process.env.CI ? " (ci)" : ""}`;
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";

@@ -282,6 +282,17 @@ No telemetry, no analytics, no logging to any remote destination. Your API key
 is held in memory, sent only to `api.cogdepot.com` over HTTPS, and never written
 to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
 
+Every request this package makes identifies itself with a `User-Agent` of
+`cogdepot-mcp/<version>` - or `cogdepot-mcp-remote/<version>` from the hosted
+server at `mcp.cogdepot.com`, and with a ` (ci)` suffix when `CI` is set, so
+continuous-integration runs are separable from real use. This exists so cogDepot
+can tell MCP traffic apart from its own storefront: before 0.7.1 the package sent
+Node's default `node`, byte-identical to what the storefront's server-side
+rendering sends, and server-side traffic measurement could not attribute a single
+tool call. The header names the software and its version. It carries no account
+identifier, no user data, and nothing that distinguishes one install from
+another.
+
 ## Remote server
 
 **Live at `https://mcp.cogdepot.com`.** Add it as a custom connector in a client

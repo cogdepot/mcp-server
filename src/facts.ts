@@ -15,7 +15,7 @@
 
 import snapshot from "./facts-snapshot.json" with { type: "json" };
 import { getDiscoveryUrl } from "./config.js";
-import { FACTS_TTL_MS, FACTS_FETCH_TIMEOUT_MS } from "./strings.js";
+import { FACTS_TTL_MS, FACTS_FETCH_TIMEOUT_MS, USER_AGENT } from "./strings.js";
 
 /**
  * The subset of `/.well-known/cogdepot.json` this server relies on. Deliberately
@@ -122,7 +122,7 @@ export async function getFacts(now: () => number = Date.now): Promise<FactsResul
 async function fetchFacts(): Promise<CogDepotFacts> {
   const response = await fetch(getDiscoveryUrl(), {
     signal: AbortSignal.timeout(FACTS_FETCH_TIMEOUT_MS),
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json", "user-agent": USER_AGENT },
   });
 
   if (!response.ok) {

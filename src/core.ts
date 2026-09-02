@@ -35,6 +35,7 @@ import {
   TITLE_GET_STARTED,
   TOOL_DISCOVER,
   TOOL_GET_STARTED,
+  USER_AGENT,
 } from "./strings.js";
 
 /**
@@ -56,8 +57,16 @@ import {
  * before calling, accurate destructive and read-only hints for hosts to prompt
  * on, and an idempotency key on every mutating call so an ambiguous outcome is
  * not resolved by charging twice.
+ *
+ * `userAgent` names the deployment in cogDepot's request logs. It defaults to
+ * the local install string and is overridden only by the hosted entrypoint,
+ * which passes REMOTE_USER_AGENT - see remote.ts. It reaches both the
+ * authenticated client and the two keyless tools that call out on their own.
  */
-export function buildServer(credential?: string | Credential): McpServer {
+export function buildServer(
+  credential?: string | Credential,
+  userAgent: string = USER_AGENT,
+): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
   // Free and keyless: always registered, so the server is useful before anyone
@@ -76,20 +85,20 @@ export function buildServer(credential?: string | Credential): McpServer {
   // The anonymous preview belongs here rather than behind the key: it is the
   // only keyless tool that shows what is actually being traded, which is the
   // question a prospective user asks before deciding a key is worth obtaining.
-  registerPreviewTool(server);
+  registerPreviewTool(server, userAgent);
   // Keyless for the same reason, one step further out: this one answers a
   // question about a counterparty rather than about the market. The party who
   // most needs a trust signal is the one deciding whether to deal at all, and
   // that party does not have an account yet - so a key gate here would publish
   // the record only to people who had already decided.
-  registerReputationTool(server);
+  registerReputationTool(server, userAgent);
 
   // Keyed but free per call. Registered only when a credential is present: the
   // spec allows the tool set to vary by the authorization presented, and
   // advertising tools that can only fail is worse than not advertising them. The
   // client normalizes a blank credential to none, so hasKey is the single source
   // of truth for "is there something to authenticate with".
-  const client = new CogDepotClient(credential);
+  const client = new CogDepotClient(credential, undefined, undefined, userAgent);
   if (client.hasKey) {
     registerAccountTools(server, client);
     registerDealTools(server, client);
