@@ -21,9 +21,9 @@
  * This was 50 in 0.1.2 and that was wrong by a factor of ten: it reported a
  * funded account's $10.00 welcome credit as 200,000 credits instead of 20,000,
  * while the dollar figure stayed correct, so the output looked internally
- * consistent. Three independent sources agree on 500 - the API's own
- * `internal/config/money.go`, the welcome credit (10,000,000 µUSD for 20,000
- * credits), and the x402 manifest (5,000,000 µUSD for 10,000 credits).
+ * consistent. Three independent sources agree on 500 - the API's own money
+ * configuration, the welcome credit (10,000,000 µUSD for 20,000 credits), and
+ * the x402 manifest (5,000,000 µUSD for 10,000 credits).
  *
  * The tests below derive the rate from a documented credit/dollar pair rather
  * than restating this constant. The 0.1.2 tests asserted the buggy output, so

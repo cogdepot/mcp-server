@@ -48,10 +48,9 @@ Parameters:
     Description: >
       Route53 hosted zone for cogdepot.com - same zone the API stack uses. Was
       Z06203922NKB14MYQ8LL5, the zone in the old management account; cogdepot.com was
-      re-delegated to Z038731330GY98JQNZMZQ in account 362099376321 during the account
-      split, and the old zone is now orphaned (nothing delegates to it). Deploying
-      against the old id would create records nobody resolves, so the name would
-      silently never come up.
+      re-delegated to the zone above during the account split, and the old zone is now
+      orphaned (nothing delegates to it). Deploying against the old id would create
+      records nobody resolves, so the name would silently never come up.
 
   ApiBaseUrl:
     Type: String

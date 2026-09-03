@@ -19,11 +19,24 @@ Also changes what the wire carries on CI runs only.
   run. `CI` was never added to that allowlist when 0.8.0 started reading it,
   so the child process never saw it and never appended the ` (ci)` marker.
 
-  Smoke is the only CI job that calls the cogDepot API for real, so every
-  request this project's own pipeline made arrived wearing the plain install
+  Smoke is the only job in THIS repository that calls the cogDepot API for
+  real, so every request this pipeline made arrived wearing the plain install
   string. Measured against production on 2026-09-03: eleven caller addresses,
   all ours, not one carrying the suffix. The marker existed and marked nothing,
   in exactly the table the User-Agent work exists to make readable.
+
+  It is not the only such job overall, and 0.8.1 shipped saying it was.
+  cogDepot's own release-drift check spawns this package under `npx` and
+  inherits the full environment minus `COGDEPOT_*`, so `CI` reaches its
+  child and its runs were ALWAYS marked - including before this fix existed.
+  Production logs show a marked row three minutes BEFORE the fix merged and an
+  unmarked row 45 minutes after it.
+
+  So the suffix is not a timeline and must not be read as one. It means the
+  caller had `CI` set. Absence has two innocent causes: a pre-fix run of this
+  script, and an operator running the package from a laptop, which is correctly
+  unmarked forever. Neither is a stranger. Attribute by IP address, not by the
+  presence of the suffix.
 
   Forwarded conditionally, so a developer running `npm run smoke` locally stays
   unmarked - setting it unconditionally would be the same measurement error
