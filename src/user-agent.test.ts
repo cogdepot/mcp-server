@@ -30,6 +30,13 @@ import {
 /** The exact shape the main repo's traffic tooling classifies on. */
 const UA_PATTERN = /^cogdepot-mcp(-remote)?\/\d+\.\d+\.\d+( \(ci\))?$/;
 
+// Exact-value assertions below compare against the exported USER_AGENT and
+// REMOTE_USER_AGENT rather than rebuilding the string from SERVER_VERSION. A
+// rebuilt literal omits the " (ci)" suffix, so it passes on a developer's
+// machine and fails in Actions, where CI is set - which is exactly how this
+// suite first went red. The constants are what is under test anyway; the format
+// itself is pinned by UA_PATTERN and by the CI-marker cases at the bottom.
+
 const DISCOVERY = {
   apiBaseUrl: "https://api.cogdepot.com",
   credits: { meteredCall: "1 credit ($0.0005) per billable request" },
@@ -96,7 +103,7 @@ describe("the authenticated client identifies itself", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.userAgent).toMatch(UA_PATTERN);
-    expect(calls[0]?.userAgent).toBe(`cogdepot-mcp/${SERVER_VERSION}`);
+    expect(calls[0]?.userAgent).toBe(USER_AGENT);
   });
 
   it("sends a versioned user-agent on a POST", async () => {
@@ -134,7 +141,7 @@ describe("the authenticated client identifies itself", () => {
     await client.request("/v1/account");
 
     expect(calls[0]?.userAgent).toMatch(UA_PATTERN);
-    expect(calls[0]?.userAgent).toBe(`cogdepot-mcp-remote/${SERVER_VERSION}`);
+    expect(calls[0]?.userAgent).toBe(REMOTE_USER_AGENT);
   });
 });
 
@@ -200,7 +207,7 @@ describe("the hosted server never borrows the caller's identity", () => {
     await close();
 
     const sent = uaFor(calls, "/v1/reputation/");
-    expect(sent).toBe(`cogdepot-mcp-remote/${SERVER_VERSION}`);
+    expect(sent).toBe(REMOTE_USER_AGENT);
     expect(sent).not.toContain("SomeMcpClient");
     for (const call of calls) {
       expect(call.userAgent).not.toContain("SomeMcpClient");
