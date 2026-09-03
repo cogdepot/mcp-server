@@ -18,7 +18,7 @@ import {
 /**
  * Outbound request identification.
  *
- * Until 0.7.1 every request this package made carried Node's default `node`,
+ * Until 0.8.0 every request this package made carried Node's default `node`,
  * which is the same string cogDepot's own storefront SSR sends. Three
  * measurement runs in a row could not attribute a single tool call, so these
  * assertions are the contract that made the attribution possible rather than a

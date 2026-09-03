@@ -287,7 +287,7 @@ Every request this package makes identifies itself with a `User-Agent` of
 `cogdepot-mcp/<version>` - or `cogdepot-mcp-remote/<version>` from the hosted
 server at `mcp.cogdepot.com`, and with a ` (ci)` suffix when `CI` is set, so
 continuous-integration runs are separable from real use. This exists so cogDepot
-can tell MCP traffic apart from its own storefront: before 0.7.1 the package sent
+can tell MCP traffic apart from its own storefront: before 0.8.0 the package sent
 Node's default `node`, byte-identical to what the storefront's server-side
 rendering sends, and server-side traffic measurement could not attribute a single
 tool call. The header names the software and its version. It carries no account

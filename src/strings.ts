@@ -8,12 +8,12 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.7.1";
+export const SERVER_VERSION = "0.8.0";
 
 /**
  * The User-Agent every outbound request from this package carries.
  *
- * Until 0.7.1 this package sent Node's default `node`, which is byte-identical
+ * Until 0.8.0 this package sent Node's default `node`, which is byte-identical
  * to what cogDepot's own storefront SSR sends: three measurement runs in a row
  * could not attribute a single tool call. The version is part of the string so
  * server-side logs can tell which release produced a call without a second

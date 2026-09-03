@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.7.1 - 2026-09-03
+## 0.8.0 - 2026-09-03
 
-Additive and backward-compatible. No tool, schema or behaviour changes; the only
-difference on the wire is one extra request header.
+Additive and backward-compatible: one new keyless tool (`cogdepot_get_stats`)
+and a User-Agent on every outbound request. Nothing existing changed shape, so
+an agent that ignores the new tool behaves exactly as it did on 0.7.0.
 
 ### Added
 
