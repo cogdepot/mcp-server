@@ -101,13 +101,20 @@ const transport = new StdioClientTransport({
   // came back 401.
   //
   // And again with CI, added in 0.8.0 and not forwarded here until now. The
-  // server reads it to append " (ci)" to its User-Agent, so CI runs can be told
-  // apart from real installs. This script is the ONLY CI job that calls the
-  // cogDepot API for real, so every request our own pipeline made arrived
-  // wearing the plain install string: measured against production on
+  // server reads it to append " (ci)" to its User-Agent, so a CI run can be
+  // told apart from an install. This script is the only job in THIS repository
+  // that calls the cogDepot API for real, so every request this pipeline made
+  // arrived wearing the plain install string: measured against production on
   // 2026-09-03, eleven caller addresses, all ours, not one carrying the suffix.
-  // The marker existed and marked nothing, in the one table the User-Agent work
-  // exists to make readable.
+  //
+  // Not the only one overall, which matters when reading that table. cogDepot's
+  // own web/scripts/mcp-drift.mjs also spawns this package under npx, and it
+  // inherits the full environment minus COGDEPOT_*, so CI reaches its child and
+  // its runs were ALWAYS marked - including before this fix existed. The suffix
+  // is therefore not a timeline: it means the caller had CI set, nothing more.
+  // Absence has two innocent causes - a pre-fix run of this script, and an
+  // operator running the package from a laptop, which is correctly unmarked
+  // forever. Neither is a stranger. Attribute by IP, not by the suffix.
   env: {
     PATH: process.env.PATH ?? "",
     ...(process.env.CI ? { CI: process.env.CI } : {}),
