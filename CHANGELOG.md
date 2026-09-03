@@ -2,8 +2,33 @@
 
 ## Unreleased
 
-**No runtime change.** The published package behaves exactly as 0.8.0 does;
-this is release-pipeline repair.
+**No change to any tool, schema or published behaviour.** One change to what
+the wire carries, and it affects CI runs only.
+
+### Changed
+
+- **Smoke runs in CI now identify themselves as CI.** `scripts/smoke.mjs`
+  spawns the built server with a hand-built environment - an allowlist, not an
+  inherited env, so a stray `COGDEPOT_API_BASE_URL` cannot redirect a smoke
+  run. `CI` was never added to that allowlist when 0.8.0 started reading it,
+  so the child process never saw it and never appended the ` (ci)` marker.
+
+  Smoke is the only CI job that calls the cogDepot API for real, so every
+  request this project's own pipeline made arrived wearing the plain install
+  string. Measured against production on 2026-09-03: eleven caller addresses,
+  all ours, not one carrying the suffix. The marker existed and marked nothing,
+  in exactly the table the User-Agent work exists to make readable.
+
+  Forwarded conditionally, so a developer running `npm run smoke` locally stays
+  unmarked - setting it unconditionally would be the same measurement error
+  pointing the other way. Three assertions in `src/user-agent.test.ts` pin the
+  forwarding, its conditionality, and that the environment stays an allowlist.
+
+  The comment above that allowlist already warned this would happen: "an
+  allowlist that does not know about a new one fails in the most misleading way
+  available: the child silently runs with the default, and the feature looks
+  broken rather than unforwarded." It named `COGDEPOT_API_BASE_URL` as the
+  precedent. `CI` is the second.
 
 ### Fixed
 

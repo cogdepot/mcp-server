@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
@@ -240,6 +242,43 @@ describe("the CI marker", () => {
     expect(strings.USER_AGENT).toBe(`cogdepot-mcp/${SERVER_VERSION}`);
     expect(strings.REMOTE_USER_AGENT).toBe(`cogdepot-mcp-remote/${SERVER_VERSION}`);
     expect(strings.USER_AGENT).not.toContain("(ci)");
+  });
+});
+
+describe("the CI marker survives the trip to a spawned server", () => {
+  // USER_AGENT reads process.env.CI at module load, inside whatever process the
+  // server runs in. Everything above proves the constant responds to CI; this
+  // proves CI actually REACHES the child in the one CI job that calls the
+  // cogDepot API for real.
+  //
+  // scripts/smoke.mjs builds the child's environment as an allowlist rather than
+  // inheriting, which is deliberate and worth keeping - it is why a stray
+  // COGDEPOT_API_BASE_URL cannot redirect a smoke run. The cost is that a new
+  // variable the server reads is invisible until someone adds it here, and CI
+  // was exactly that: added in 0.8.0, never forwarded, so every request our own
+  // pipeline made wore the plain install string. Eleven caller addresses in
+  // production on 2026-09-03, all ours, not one marked.
+  //
+  // A text assertion rather than a spawn: the env literal is the thing that was
+  // wrong, and reading it is cheaper and steadier than building dist/ and
+  // starting a server to observe a header. The same tactic claims.test.ts uses.
+  const smoke = readFileSync("scripts/smoke.mjs", "utf8");
+
+  it("forwards CI to the spawned server", () => {
+    expect(smoke).toMatch(/CI:\s*process\.env\.CI/);
+  });
+
+  it("still forwards it conditionally, so a local run stays unmarked", () => {
+    // Setting CI unconditionally would mark every developer's smoke run as CI
+    // traffic, which is the same measurement error in the other direction.
+    expect(smoke).toMatch(/process\.env\.CI\s*\?\s*\{\s*CI:\s*process\.env\.CI\s*\}\s*:\s*\{\}/);
+  });
+
+  it("keeps building the environment as an allowlist rather than inheriting", () => {
+    // If this ever becomes ...process.env the two assertions above stop meaning
+    // anything, and a stray COGDEPOT_API_BASE_URL could redirect a smoke run.
+    expect(smoke).toContain('PATH: process.env.PATH ?? ""');
+    expect(smoke).not.toMatch(/\.\.\.process\.env/);
   });
 });
 

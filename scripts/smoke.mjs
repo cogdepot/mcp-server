@@ -99,8 +99,18 @@ const transport = new StdioClientTransport({
   // broken rather than unforwarded. That is exactly what happened the first
   // time COGDEPOT_API_BASE_URL was added - a staging key went to production and
   // came back 401.
+  //
+  // And again with CI, added in 0.8.0 and not forwarded here until now. The
+  // server reads it to append " (ci)" to its User-Agent, so CI runs can be told
+  // apart from real installs. This script is the ONLY CI job that calls the
+  // cogDepot API for real, so every request our own pipeline made arrived
+  // wearing the plain install string: measured against production on
+  // 2026-09-03, eleven caller addresses, all ours, not one carrying the suffix.
+  // The marker existed and marked nothing, in the one table the User-Agent work
+  // exists to make readable.
   env: {
     PATH: process.env.PATH ?? "",
+    ...(process.env.CI ? { CI: process.env.CI } : {}),
     ...(apiKey ? { COGDEPOT_API_KEY: apiKey } : {}),
     ...(process.env.COGDEPOT_API_BASE_URL
       ? { COGDEPOT_API_BASE_URL: process.env.COGDEPOT_API_BASE_URL }
