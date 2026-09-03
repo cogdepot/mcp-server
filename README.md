@@ -640,6 +640,33 @@ transmits has changed, stay manual. A script should not guess at either.
 npm run verify:local
 ```
 
+### Tell the cogDepot repository before you publish
+
+**A publish here blocks cogDepot production deploys until its docs catch up.**
+Not a courtesy - a hard gate, and it has fired twice.
+
+cogDepot's `web/scripts/mcp-drift.mjs` compares npm's `dist-tags.latest`
+against every version claim in its own documents, and it gates both
+`deploy-production.yml` and `deploy-storefront-production.yml`. The moment a
+new version reaches npm, those claims are stale and cogDepot cannot deploy
+production until someone updates them.
+
+| Publish | Blocked on |
+|---|---|
+| 0.8.0, 08:08Z | 3 claims - an unclassified `cogdepot_get_stats`, the keyless tool count, ten 0.7.0 version strings |
+| 0.8.1, 12:23Z | 9 version claims |
+
+Both times cogDepot found out by running the gate itself, with production
+already blocked. Say so first and the doc update ships alongside the release
+instead of after it.
+
+**Say more than the version when the tool set changes.** A new or removed tool
+also needs classifying in that script's `KNOWN_TOOLS` allowlist, needs
+`MCPToolCount` and `MCPKeylessToolCount` bumped in `internal/config/mcp.go`,
+and needs a clause in four separate prose enumerations that a Go test counts.
+`cogdepot_get_stats` needed all of it. A version-only bump like 0.8.1 needs
+none of it.
+
 ### Promoting and tagging
 
 `main` requires a pull request and passing checks, with no bypass actors. It is
