@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 - 2026-09-03
 
-**No change to any tool, schema or published behaviour.** One change to what
-the wire carries, and it affects CI runs only.
+**No change to any tool, schema or published behaviour.** `dist/` is identical
+to 0.8.0 apart from the version string it reports. The release exists to carry
+the pipeline repair below into a tag, so the MCP Registry entry publishes the
+way every release before 0.8.0 did - from GitHub Actions, over OIDC, with no
+personal account involved. 0.8.0 reached npm but never reached the registry,
+and could not be re-run to get there.
+
+Also changes what the wire carries on CI runs only.
 
 ### Changed
 
