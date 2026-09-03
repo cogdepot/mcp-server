@@ -37,6 +37,7 @@ const COVERED = {
   // for the same fact, arriving when nobody is looking for it. A warning that
   // clears itself the day the API ships is the better trade.
   "GET /v1/reputation/{handle}": "cogdepot_get_reputation",
+  "GET /stats.json": "cogdepot_get_stats",
 
   "GET /v1/feed": "cogdepot_browse_feed",
   "GET /v1/listings/{id}": "cogdepot_get_listing",
@@ -82,6 +83,15 @@ const EXCLUDED = {
     "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
     "party that cannot call the API, which is never the situation an MCP tool is in.",
 
+  "GET /.well-known/jwks.json":
+    "JWK Set carrying the public half of the Agent Card signing key. Key material for " +
+    "verifying a signature offline, not a fact about the market - there is nothing here " +
+    "a model could act on, and a party that can call the API has no reason to fetch it.",
+  "GET /.well-known/paseto-keys.json":
+    "PASETO v4.public verification keys for reputation attestations and deal credentials. " +
+    "Excluded on the reasoning already written against POST /v1/account/reputation/attestation: " +
+    "these keys exist for OFFLINE verification by a party that cannot call the API, which is " +
+    "never the situation an MCP tool is in.",
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
   "GET /.well-known/cogdepot.json": "Read directly as the live-facts source.",

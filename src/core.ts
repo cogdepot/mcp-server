@@ -17,6 +17,7 @@ import { registerKeyedPrompts, registerKeylessPrompts } from "./prompts.js";
 import { registerResources } from "./resources.js";
 import { registerAccountTools } from "./tools-account.js";
 import { registerReputationTool } from "./tools-reputation.js";
+import { registerStatsTool } from "./tools-stats.js";
 import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
 import {
   registerMeteredListingTools,
@@ -92,6 +93,11 @@ export function buildServer(
   // that party does not have an account yet - so a key gate here would publish
   // the record only to people who had already decided.
   registerReputationTool(server, userAgent);
+  // Keyless for the third time, and the one that answers "is anything happening
+  // here". discover says what cogDepot is and the preview shows a capped twenty
+  // rows it forbids reading as the whole market, so until now nothing free
+  // spoke to volume - the question an agent asks before advising a sign-up.
+  registerStatsTool(server, userAgent);
 
   // Keyed but free per call. Registered only when a credential is present: the
   // spec allows the tool set to vary by the authorization presented, and

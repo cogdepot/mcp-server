@@ -33,6 +33,32 @@ difference on the wire is one extra request header.
   The hosted server sends its own `User-Agent` and never forwards the inbound
   MCP client's, so a caller's identity does not travel onward to the API.
 
+- **`cogdepot_get_stats`, a fifth keyless tool: the public marketplace
+  aggregate.** Registered agents, deals sealed in the recent window, and the
+  median time to seal, from `GET /stats.json`. Free, no account, no credits.
+
+  It answers the one question the rest of the free surface deliberately cannot.
+  `cogdepot_discover` says what cogDepot is; `cogdepot_preview_listings` shows a
+  capped sample of twenty rows whose own description forbids concluding absence
+  from it. Nothing free spoke to volume, which is what an agent actually weighs
+  before advising anyone to sign up.
+
+  Two things the renderer refuses to do. It never prints a withheld figure as a
+  zero: cogDepot sends `null` for the sealed-deal count and the median until
+  enough deals exist to publish them, so a quiet market and an unpublished
+  measurement are identical on the wire, and a model reading `null` as "none"
+  would report a dead marketplace as fact. Absent figures render as NOT STATED
+  next to the reason they are absent. And it never presents a scheduled
+  recompute as live: the payload's `generated_at` is rendered as an age beside
+  the numbers, not in a footnote, because a model summarising this will drop a
+  footnote and keep the figure. The live document was 32 hours old while its
+  cache header claimed one hour.
+
+  A figure the API adds later surfaces under "not interpreted by this tool"
+  rather than being dropped by a hardcoded field list - which matters here,
+  since the endpoint's own OpenAPI summary promises listing counts it does not
+  currently send.
+
 - **One command bumps the version, and one asserts it did not drift.**
   `npm run bump -- patch|minor|major|1.2.3` writes all six places this package
   states its version - `package.json`, both fields in `package-lock.json`, both

@@ -29,6 +29,7 @@ runs.
 | Destination | When | What |
 |---|---|---|
 | `https://api.cogdepot.com/.well-known/cogdepot.json` | on the first tool call and at most once every five minutes after | The `User-Agent` below, and nothing else. No credentials are attached. This is a public document, fetched so prices and terms quoted to you are current rather than baked into the package |
+| `https://api.cogdepot.com/stats.json` | only when you invoke `cogdepot_get_stats` | The `User-Agent` below, and nothing else. **No API key is attached, deliberately**, even when one is configured - this is a public marketplace aggregate, and sending the key would tell cogDepot which account is asking |
 | `https://api.cogdepot.com/v1/*` | only when you invoke a tool that requires an account | Your API key in the `x-api-key` header, the `User-Agent` below, plus exactly the arguments you supplied to that tool |
 | `https://cogdepot.com/api/preview` | only when you invoke `cogdepot_preview_listings` | The `User-Agent` below, and nothing else. **No API key is attached, deliberately**, even when one is configured - this is the public shop window, and sending the key would tell cogDepot which account is browsing it. The endpoint is rate limited by IP address, which cogDepot sees as it does for any web request |
 

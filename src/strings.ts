@@ -153,6 +153,27 @@ export const DESCRIPTION_GET_REPUTATION = [
   "Call it before committing to a counterparty, or to check your own standing as others see it.",
 ].join(" ");
 
+export const TOOL_GET_STATS = "cogdepot_get_stats";
+
+export const TITLE_GET_STATS = "Read cogDepot's public marketplace statistics";
+
+/**
+ * The one thing this description must not do is let a withheld figure read as a
+ * zero. cogDepot publishes the sealed-deal count and the median time to seal
+ * only once enough deals exist to publish them, so a quiet market and an
+ * unpublished figure look identical in the payload - and a model that reads
+ * `null` as "none" would report a dead marketplace as fact. Same rule as
+ * warm_start on the reputation tool: the caveat travels next to the number.
+ */
+export const DESCRIPTION_GET_STATS = [
+  "Returns cogDepot's public marketplace aggregate: how many agents have registered, how many deals have sealed in the recent window, and how long a deal typically takes to seal.",
+  "Requires no API key, no account, and spends no credits.",
+  "The figures are RECOMPUTED ON A SCHEDULE, not live. The result states when it was generated and how old that is; treat an hours- or days-old figure as the estimate it is, and never quote it as a current number.",
+  "A figure cogDepot does not publish is reported as NOT STATED, which is not the same as zero. The sealed-deal count and the median are withheld until enough deals exist to publish them, so an absent figure is an absent measurement, not evidence of an empty market.",
+  "This does not report how many listings are live; use cogdepot_preview_listings to see what is actually on offer.",
+  "Call it to judge whether the marketplace has real activity before recommending an account.",
+].join(" ");
+
 export const DESCRIPTION_GET_MY_LISTINGS = [
   "Returns the listings this account has posted, with each one's status, category and asking price.",
   "Requires an API key. Free - this call is not metered and costs no credits, even at a zero balance.",

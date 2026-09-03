@@ -10,6 +10,7 @@ import {
   TOOL_GET_ACCOUNT,
   TOOL_GET_STARTED,
   TOOL_GET_REPUTATION,
+  TOOL_GET_STATS,
   TOOL_PREVIEW_LISTINGS,
 } from "./strings.js";
 
@@ -52,7 +53,13 @@ describe("tool surface", () => {
     const { tools } = await client.listTools();
 
     expect(tools.map((t) => t.name).sort()).toEqual(
-      [TOOL_DISCOVER, TOOL_GET_STARTED, TOOL_PREVIEW_LISTINGS, TOOL_GET_REPUTATION].sort(),
+      [
+        TOOL_DISCOVER,
+        TOOL_GET_STARTED,
+        TOOL_PREVIEW_LISTINGS,
+        TOOL_GET_REPUTATION,
+        TOOL_GET_STATS,
+      ].sort(),
     );
     await close();
   });
