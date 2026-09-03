@@ -188,10 +188,57 @@ jobs:
 
       - name: Authenticate to the MCP Registry
         # github-oidc, not github: the latter is the interactive device-code flow.
-        run: ./mcp-publisher login github-oidc
+        #
+        # Retried because registry.modelcontextprotocol.io is intermittently
+        # unresolvable. Measured on 2026-09-03 from the cogDepot side: a drift
+        # check against it needed three attempts, twice reporting the host
+        # unreachable, while npm resolved fine in the same pass.
+        #
+        # Everything from here on runs AFTER npm publish, which cannot be
+        # replayed. A DNS blip in this step would strand a version on npm with
+        # no registry entry - the same outcome 0.8.0 had from a different cause.
+        # workflow_dispatch makes that recoverable now, but a coin flip should
+        # not turn a release into a manual recovery.
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if ./mcp-publisher login github-oidc; then exit 0; fi
+            [ "$attempt" = 3 ] && break
+            echo "login attempt $attempt failed; retrying in ${attempt}0s"
+            sleep "${attempt}0"
+          done
+          echo "::error::could not authenticate to the MCP Registry after 3 attempts"
+          exit 1
 
       - name: Publish to the MCP Registry
-        run: ./mcp-publisher publish
+        # Same retry, plus one thing login does not need: a publish that reached
+        # the registry and then lost its response looks identical to one that
+        # never arrived, and blindly retrying that would fail on "version
+        # already exists" - turning a transient into a hard failure after npm
+        # has already published. So each failure asks the registry which case it
+        # was before retrying. Same shape as the npm publish guard above: verify
+        # the end state rather than trusting the attempt.
+        run: |
+          set -uo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          NAME=$(node -p "require('./server.json').name")
+          for attempt in 1 2 3; do
+            if ./mcp-publisher publish; then
+              echo "published on attempt $attempt"
+              exit 0
+            fi
+            if curl -sf --max-time 30 \
+                 "https://registry.modelcontextprotocol.io/v0/servers?search=${NAME}&version=latest" \
+                 | grep -q "\"version\":\"${VERSION}\""; then
+              echo "the registry already serves ${VERSION}; attempt $attempt reached it after all"
+              exit 0
+            fi
+            [ "$attempt" = 3 ] && break
+            echo "publish attempt $attempt failed and ${VERSION} is not live; retrying in ${attempt}0s"
+            sleep "${attempt}0"
+          done
+          echo "::error::the MCP Registry publish did not succeed after 3 attempts"
+          exit 1
 
       - name: Remind that propagation is not proven by a successful publish
         run: |
