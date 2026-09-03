@@ -673,7 +673,7 @@ version. Run it by hand with `npm run verify:published [version]`.
 from the tag:
 
 ```bash
-gh workflow run publish.yml --repo cogdepot/mcp-server --ref v0.8.0
+gh workflow run publish.yml --repo cogdepot/mcp-server --ref v0.8.1
 ```
 
 Run it from the tag, never a branch: every step derives the version by stripping
@@ -689,6 +689,11 @@ a propagation race three seconds after a correct publish, the registry steps
 skipped, and every re-run then failed earlier still - on `npm publish`, for a
 version npm already had. The npm release was fine; the registry entry was
 stranded, and no amount of re-running could reach it.
+
+**0.8.1 is the earliest tag this works on.** `workflow_dispatch` runs the
+workflow file at the ref you name, so a tag cut before the hatch existed does
+not have it - dispatching `--ref v0.8.0` does nothing, which is exactly why
+0.8.0's registry entry had to wait for the next release rather than a re-run.
 
 The gate exists because the package points at production by default while the
 live write check refuses production, so nothing else looks there. When
