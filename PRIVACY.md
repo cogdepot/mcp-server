@@ -1,6 +1,6 @@
 # Privacy Policy - cogDepot MCP server
 
-Last updated: 2026-08-09
+Last updated: 2026-09-03
 
 This policy covers the `@cogdepot/mcp-server` package: the MCP server you run on
 your own machine. The cogDepot platform it talks to is governed separately by the
@@ -14,17 +14,24 @@ infrastructure except through the ordinary cogDepot API calls described below.
 
 ## What it collects
 
-**Nothing.** This package has no analytics, no telemetry, no crash reporting and
-no logging to any remote destination. It opens no network connection other than
-the ones listed in the next section.
+**Nothing about you.** This package has no analytics, no telemetry, no crash
+reporting and no logging to any remote destination. It opens no network
+connection other than the ones listed in the next section.
+
+Every request it makes does identify the software itself, in a `User-Agent`
+header - see [Software identification](#software-identification) below. That
+header names this package and its version. It is not an identifier for you, your
+account or your installation, and it does not change between users or between
+runs.
 
 ## What it sends, and where
 
 | Destination | When | What |
 |---|---|---|
-| `https://api.cogdepot.com/.well-known/cogdepot.json` | on the first tool call and at most once every five minutes after | Nothing but the request itself. No credentials are attached. This is a public document, fetched so prices and terms quoted to you are current rather than baked into the package |
-| `https://api.cogdepot.com/v1/*` | only when you invoke a tool that requires an account | Your API key in the `x-api-key` header, plus exactly the arguments you supplied to that tool |
-| `https://cogdepot.com/api/preview` | only when you invoke `cogdepot_preview_listings` | Nothing but the request itself. **No API key is attached, deliberately**, even when one is configured - this is the public shop window, and sending the key would tell cogDepot which account is browsing it. The endpoint is rate limited by IP address, which cogDepot sees as it does for any web request |
+| `https://api.cogdepot.com/.well-known/cogdepot.json` | on the first tool call and at most once every five minutes after | The `User-Agent` below, and nothing else. No credentials are attached. This is a public document, fetched so prices and terms quoted to you are current rather than baked into the package |
+| `https://api.cogdepot.com/stats.json` | only when you invoke `cogdepot_get_stats` | The `User-Agent` below, and nothing else. **No API key is attached, deliberately**, even when one is configured - this is a public marketplace aggregate, and sending the key would tell cogDepot which account is asking |
+| `https://api.cogdepot.com/v1/*` | only when you invoke a tool that requires an account | Your API key in the `x-api-key` header, the `User-Agent` below, plus exactly the arguments you supplied to that tool |
+| `https://cogdepot.com/api/preview` | only when you invoke `cogdepot_preview_listings` | The `User-Agent` below, and nothing else. **No API key is attached, deliberately**, even when one is configured - this is the public shop window, and sending the key would tell cogDepot which account is browsing it. The endpoint is rate limited by IP address, which cogDepot sees as it does for any web request |
 
 No other host is ever contacted. The preview address is read from the discovery
 document rather than hard-coded, so that it can move without stranding installed
@@ -38,6 +45,33 @@ a non-production environment. It is constrained to **https** and to hosts under
 starting. That constraint exists precisely because this process attaches your
 API key to every request, so an unrestricted setting would be a way to send it
 somewhere else.
+
+## Software identification
+
+Every outbound request carries a `User-Agent` header naming this package and its
+version:
+
+| Where it runs | `User-Agent` |
+|---|---|
+| the package on your own machine | `cogdepot-mcp/<version>` |
+| the hosted server at `mcp.cogdepot.com` | `cogdepot-mcp-remote/<version>` |
+| either, under continuous integration (`CI` is set) | the same, with ` (ci)` appended |
+
+The version is the package version, so it changes with each release.
+
+**Why it exists.** cogDepot's own storefront renders pages server-side, and those
+requests carried the same default `User-Agent` this package did - Node's `node`.
+Server-side traffic measurement therefore could not separate MCP tool calls from
+ordinary page rendering. This header makes that separation possible.
+
+**What it is not.** It is not an identifier. It is the same string for every user
+of a given release, it does not change between runs, it contains no account
+identifier, no machine identifier, no key and no user data, and it cannot be used
+to link two requests to the same install. The ` (ci)` marker reflects only the
+presence of the `CI` environment variable, which build systems set.
+
+The hosted server sends its own `User-Agent` and never forwards the one your MCP
+client sent to it; your client's identity does not travel onward to the API.
 
 ## Your API key
 

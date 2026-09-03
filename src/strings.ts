@@ -8,7 +8,35 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.7.0";
+export const SERVER_VERSION = "0.8.0";
+
+/**
+ * The User-Agent every outbound request from this package carries.
+ *
+ * Until 0.8.0 this package sent Node's default `node`, which is byte-identical
+ * to what cogDepot's own storefront SSR sends: three measurement runs in a row
+ * could not attribute a single tool call. The version is part of the string so
+ * server-side logs can tell which release produced a call without a second
+ * lookup.
+ *
+ * The `(ci)` marker is not cosmetic. GitHub Actions sets CI=true, and cogDepot's
+ * pr-checks workflow exercises this package from Azure-range runners; those
+ * bursts polluted the 2026-08-22 measurement and are now separable from real
+ * installs. Evaluated once at module load, which is correct for both the CLI
+ * (one process per session) and the Lambda (one process per container).
+ */
+export const USER_AGENT = `cogdepot-mcp/${SERVER_VERSION}${process.env.CI ? " (ci)" : ""}`;
+
+/**
+ * The User-Agent the hosted server (mcp.cogdepot.com) sends instead.
+ *
+ * Traffic from the hosted deployment is one shared process serving many callers,
+ * so it says nothing about how many installs exist - counting it alongside local
+ * installs would overstate one and hide the other. Passed explicitly from the
+ * remote entrypoint rather than sniffed from the environment, so a local process
+ * can never accidentally claim to be the hosted one.
+ */
+export const REMOTE_USER_AGENT = `cogdepot-mcp-remote/${SERVER_VERSION}${process.env.CI ? " (ci)" : ""}`;
 
 export const DEFAULT_API_BASE_URL = "https://api.cogdepot.com";
 export const SITE_URL = "https://cogdepot.com";
@@ -123,6 +151,27 @@ export const DESCRIPTION_GET_REPUTATION = [
   "finalized_count is the unfakeable number: it is never seeded, and each one cost both sides a real fee.",
   "cogDepot attests only to deals it settled, and a rating moves only when at least one side was funded with real money - so these counters cannot be inflated by trading with yourself for free.",
   "Call it before committing to a counterparty, or to check your own standing as others see it.",
+].join(" ");
+
+export const TOOL_GET_STATS = "cogdepot_get_stats";
+
+export const TITLE_GET_STATS = "Read cogDepot's public marketplace statistics";
+
+/**
+ * The one thing this description must not do is let a withheld figure read as a
+ * zero. cogDepot publishes the sealed-deal count and the median time to seal
+ * only once enough deals exist to publish them, so a quiet market and an
+ * unpublished figure look identical in the payload - and a model that reads
+ * `null` as "none" would report a dead marketplace as fact. Same rule as
+ * warm_start on the reputation tool: the caveat travels next to the number.
+ */
+export const DESCRIPTION_GET_STATS = [
+  "Returns cogDepot's public marketplace aggregate: how many agents have registered, how many deals have sealed in the recent window, and how long a deal typically takes to seal.",
+  "Requires no API key, no account, and spends no credits.",
+  "The figures are RECOMPUTED ON A SCHEDULE, not live. The result states when it was generated and how old that is; treat an hours- or days-old figure as the estimate it is, and never quote it as a current number.",
+  "A figure cogDepot does not publish is reported as NOT STATED, which is not the same as zero. The sealed-deal count and the median are withheld until enough deals exist to publish them, so an absent figure is an absent measurement, not evidence of an empty market.",
+  "This does not report how many listings are live; use cogdepot_preview_listings to see what is actually on offer.",
+  "Call it to judge whether the marketplace has real activity before recommending an account.",
 ].join(" ");
 
 export const DESCRIPTION_GET_MY_LISTINGS = [

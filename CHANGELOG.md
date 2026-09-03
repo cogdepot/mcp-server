@@ -1,5 +1,112 @@
 # Changelog
 
+## 0.8.0 - 2026-09-03
+
+Additive and backward-compatible: one new keyless tool (`cogdepot_get_stats`)
+and a User-Agent on every outbound request. Nothing existing changed shape, so
+an agent that ignores the new tool behaves exactly as it did on 0.7.0.
+
+### Added
+
+- **Every outbound request now identifies itself with a `User-Agent`.** The
+  local package sends `cogdepot-mcp/<version>`, the hosted server at
+  `mcp.cogdepot.com` sends `cogdepot-mcp-remote/<version>`, and either appends
+  ` (ci)` when the `CI` environment variable is set.
+
+  Until now this package sent Node's default `node`. That is byte-identical to
+  what cogDepot's own storefront server-side rendering sends, so three
+  consecutive server-side measurement runs could not attribute a single tool
+  call - MCP traffic and page renders were the same string from the same
+  hosts. The version is in the header so a log line names a release without a
+  second lookup, and the hosted variant is separate because one shared process
+  serving many callers says nothing about how many installs exist.
+
+  The ` (ci)` marker exists for a specific contamination: GitHub Actions sets
+  `CI`, and cogDepot's own pr-checks workflow exercises this package from
+  Azure-range runners. Those bursts polluted the 2026-08-22 measurement and are
+  now separable from real use.
+
+  The header names the software and its version only. It carries no account
+  identifier, no user data, and nothing that distinguishes one install from
+  another. `PRIVACY.md` gains a "Software identification" section stating
+  exactly that, and its "what it sends" table now enumerates the header.
+
+  The hosted server sends its own `User-Agent` and never forwards the inbound
+  MCP client's, so a caller's identity does not travel onward to the API.
+
+- **`cogdepot_get_stats`, a fifth keyless tool: the public marketplace
+  aggregate.** Registered agents, deals sealed in the recent window, and the
+  median time to seal, from `GET /stats.json`. Free, no account, no credits.
+
+  It answers the one question the rest of the free surface deliberately cannot.
+  `cogdepot_discover` says what cogDepot is; `cogdepot_preview_listings` shows a
+  capped sample of twenty rows whose own description forbids concluding absence
+  from it. Nothing free spoke to volume, which is what an agent actually weighs
+  before advising anyone to sign up.
+
+  Two things the renderer refuses to do. It never prints a withheld figure as a
+  zero: cogDepot sends `null` for the sealed-deal count and the median until
+  enough deals exist to publish them, so a quiet market and an unpublished
+  measurement are identical on the wire, and a model reading `null` as "none"
+  would report a dead marketplace as fact. Absent figures render as NOT STATED
+  next to the reason they are absent. And it never presents a scheduled
+  recompute as live: the payload's `generated_at` is rendered as an age beside
+  the numbers, not in a footnote, because a model summarising this will drop a
+  footnote and keep the figure. The live document was 32 hours old while its
+  cache header claimed one hour.
+
+  A figure the API adds later surfaces under "not interpreted by this tool"
+  rather than being dropped by a hardcoded field list - which matters here,
+  since the endpoint's own OpenAPI summary promises listing counts it does not
+  currently send.
+
+- **One command bumps the version, and one asserts it did not drift.**
+  `npm run bump -- patch|minor|major|1.2.3` writes all six places this package
+  states its version - `package.json`, both fields in `package-lock.json`, both
+  in `server.json`, and `SERVER_VERSION` in `src/strings.ts`.
+  `npm run version:check` asserts they agree and names the ones that do not.
+
+  Nothing reconciled those six before, so a hand bump updated the ones the
+  bumper remembered, and both directions have cost a release. `SERVER_VERSION`
+  sat at 0.1.0 through 0.1.1 and 0.1.2, so every client was told the wrong
+  version by the one field a client can see. `package-lock.json` then sat at
+  0.3.0 through four releases, because the publish workflow checks three files
+  against the git tag and the lock is not one of them.
+
+  `version:check` now runs inside `verify` and `verify:local`, and
+  `prepublishOnly` runs `verify`, so a drifted tree cannot reach npm.
+  `src/version.test.ts` asserts the same invariant in the test suite, reading
+  the carrier list out of `scripts/version.mjs` so the guard and the tool that
+  fixes a failure cannot disagree about what a carrier is.
+
+  A version at or below the current one is refused unless `--force` is passed,
+  because npm allows no republish. `--dry-run` reports the change without
+  writing.
+
+- **`verify:published` checks the artefact npm actually serves.** Everything
+  else here tests the source. This installs the published tarball by name and
+  version, the way a stranger's client does, and asserts what it advertises:
+  its own reported version, both route-declaration fields on
+  `cogdepot_update_profile`, the binding enum, an unchanged required list, and
+  the two reveal fields named in `cogdepot_get_deal`.
+
+  `npm publish` reports that an upload happened, not that the upload was
+  correct. A stale `dist/`, a `files` list omitting a module, or a build
+  carrying the previous commit's output all publish cleanly. `publish.yml` runs
+  this after the npm publish and before the registry publish, so a tarball that
+  does not do what it claims is not also advertised to every MCP client. It
+  cannot block a release that already happened - it makes one loud instead of
+  silent, and the remedy is a follow-up version.
+
+  Verified against the live 0.7.0 on npm: all seven checks pass.
+
+### Fixed
+
+- **`package-lock.json` said 0.3.0.** It had drifted four releases behind and
+  nothing checked it, because the publish workflow compares the git tag against
+  `package.json` and `server.json` only. Corrected to the released version;
+  `version:check` above is what keeps it there.
+
 ## 0.7.0 - 2026-08-29
 
 Additive and backward-compatible. An agent that sends neither new field behaves

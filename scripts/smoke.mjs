@@ -24,6 +24,12 @@ const REQUIRED_TOOLS = [
   // both halves: that the route answers, and that the tool is advertised
   // without a key.
   "cogdepot_get_reputation",
+  // Keyless as well, and the only one that speaks to the market as a whole
+  // rather than to one listing or one counterparty. Spawned rather than mocked
+  // for the same reason as the preview: this route lives on api.cogdepot.com
+  // outside /v1, so a redirect or an HTML error page there is invisible to the
+  // unit tests, which necessarily stub the fetch.
+  "cogdepot_get_stats",
 ];
 
 /**
@@ -70,6 +76,7 @@ const SAFE_TO_CALL = [
   // Free, unmetered, keyless and read-only. Unlike everything else here it takes
   // a required argument, so the call loop supplies one from SMOKE_ARGS.
   "cogdepot_get_reputation",
+  "cogdepot_get_stats",
   "cogdepot_get_account",
   "cogdepot_get_my_listings",
 ];

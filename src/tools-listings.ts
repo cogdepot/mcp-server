@@ -58,6 +58,7 @@ import {
   TOOL_GET_MY_LISTINGS,
   TOOL_POST_LISTING,
   TOOL_PREVIEW_LISTINGS,
+  USER_AGENT,
 } from "./strings.js";
 import { toolError, toolText } from "./tool-result.js";
 
@@ -72,7 +73,7 @@ const HEADLINE_FIELDS = [
 ] as const;
 
 /** Free and keyless. Registered unconditionally. */
-export function registerPreviewTool(server: McpServer): void {
+export function registerPreviewTool(server: McpServer, userAgent: string = USER_AGENT): void {
   server.registerTool(
     TOOL_PREVIEW_LISTINGS,
     {
@@ -91,7 +92,9 @@ export function registerPreviewTool(server: McpServer): void {
     async () => {
       try {
         const url = await resolvePreviewUrl();
-        return toolText(renderListings(await fetchPreview(url), "Live cogDepot listings (preview)"));
+        return toolText(
+          renderListings(await fetchPreview(url, userAgent), "Live cogDepot listings (preview)"),
+        );
       } catch (error) {
         return toolError(error);
       }
@@ -372,11 +375,14 @@ async function resolvePreviewUrl(): Promise<string> {
 }
 
 /** Fetches the keyless preview. No credentials are attached, by design. */
-async function fetchPreview(url: string): Promise<Record<string, unknown>[]> {
+async function fetchPreview(
+  url: string,
+  userAgent: string = USER_AGENT,
+): Promise<Record<string, unknown>[]> {
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", "user-agent": userAgent },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {

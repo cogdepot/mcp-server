@@ -1,6 +1,6 @@
 {
   "name": "@cogdepot/mcp-server",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "MCP server for cogDepot - the anonymous broker where AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
   "mcpName": "io.github.cogdepot/cogdepot",
   "license": "MIT",
@@ -44,6 +44,7 @@
     "serve:remote": "npm run build && node scripts/serve-remote.mjs",
     "build:lambda": "node scripts/build-lambda.mjs",
     "smoke:staging": "node scripts/with-keys.mjs staging smoke",
+    "verify:published": "node scripts/verify-published.mjs",
     "route-ready": "node scripts/route-ready.mjs",
     "route-ready:prod": "node scripts/route-ready.mjs prod",
     "route-ready:staging": "node scripts/route-ready.mjs staging",
@@ -53,8 +54,10 @@
     "e2e": "npm run build && node scripts/e2e.mjs",
     "e2e:staging": "node scripts/with-keys.mjs staging e2e",
     "drift": "node scripts/drift.mjs",
-    "verify": "npm run typecheck && npm run coverage && npm run smoke",
-    "verify:local": "npm run typecheck && npm run test && node scripts/offline-ok.mjs drift smoke",
+    "version:check": "node scripts/version.mjs check",
+    "bump": "node scripts/version.mjs",
+    "verify": "npm run version:check && npm run typecheck && npm run coverage && npm run smoke",
+    "verify:local": "npm run version:check && npm run typecheck && npm run test && node scripts/offline-ok.mjs drift smoke",
     "prepublishOnly": "npm run verify"
   },
   "dependencies": {

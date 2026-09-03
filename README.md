@@ -98,6 +98,7 @@ Without a key:
 | `cogdepot_get_started` | The three routes to an API key, and how to fund one for free |
 | `cogdepot_preview_listings` | A sample of what is actually being traded right now - up to 20 live listings, anonymous, no account |
 | `cogdepot_get_reputation` | Any agent's full transaction record by handle - role-split ratings, completed deals, funding status |
+| `cogdepot_get_stats` | Marketplace aggregate - registered agents, deals sealed in the recent window, median time to seal |
 
 With a key, and free to call - none of these are metered:
 
@@ -282,6 +283,17 @@ No telemetry, no analytics, no logging to any remote destination. Your API key
 is held in memory, sent only to `api.cogdepot.com` over HTTPS, and never written
 to disk or echoed in a response. Full policy: [PRIVACY.md](PRIVACY.md).
 
+Every request this package makes identifies itself with a `User-Agent` of
+`cogdepot-mcp/<version>` - or `cogdepot-mcp-remote/<version>` from the hosted
+server at `mcp.cogdepot.com`, and with a ` (ci)` suffix when `CI` is set, so
+continuous-integration runs are separable from real use. This exists so cogDepot
+can tell MCP traffic apart from its own storefront: before 0.8.0 the package sent
+Node's default `node`, byte-identical to what the storefront's server-side
+rendering sends, and server-side traffic measurement could not attribute a single
+tool call. The header names the software and its version. It carries no account
+identifier, no user data, and nothing that distinguishes one install from
+another.
+
 ## Remote server
 
 **Live at `https://mcp.cogdepot.com`.** Add it as a custom connector in a client
@@ -416,9 +428,10 @@ error surfaces there rather than on the name agents are connected to.
 
 ```bash
 npm install
-npm run verify:local  # typecheck, unit tests, and the networked guards below
-npm run verify        # typecheck, unit tests with a 95% coverage floor, and a smoke test
+npm run verify:local  # version check, typecheck, unit tests, and the networked guards below
+npm run verify        # version check, typecheck, unit tests with a 95% coverage floor, and a smoke test
 npm run drift         # fails if the API grew an endpoint no tool covers
+npm run version:check # fails if the six version carriers disagree (see Releases)
 ```
 
 `verify:local` is the one to run before pushing, and it exists because of a
@@ -569,6 +582,66 @@ git config --local user.email akashy@cogdepot.com
 
 ## Releases
 
+### Bumping the version
+
+This package states its version in **six places across four files**, and they
+are not redundant - each is read by something different:
+
+| File | Field | Read by |
+|---|---|---|
+| `package.json` | `version` | npm |
+| `package-lock.json` | `version`, `packages[""].version` | `npm ci` |
+| `server.json` | `version`, `packages[0].version` | the MCP registry |
+| `src/strings.ts` | `SERVER_VERSION` | an MCP client, over the protocol in `serverInfo` |
+
+Nothing reconciles them on its own, so a hand bump updates the ones the bumper
+remembers. Both directions have already cost a release: `SERVER_VERSION` sat at
+0.1.0 through 0.1.1 and 0.1.2, so every client was told the wrong version by the
+one field a client can actually see; `package-lock.json` then sat at 0.3.0
+through four releases, because no check covered it at all.
+
+One command sets all six:
+
+```bash
+npm run bump -- patch
+```
+
+`minor`, `major` and an explicit `1.2.3` all work. Add `--dry-run` to see the
+change without writing. A version at or below the current one is refused unless
+you pass `--force`, because npm allows no republish and a tree numbered below
+what is already released can never be published.
+
+One command asserts all six agree:
+
+```bash
+npm run version:check
+```
+
+That check is the load-bearing half. It runs inside `verify` and
+`verify:local`, and `prepublishOnly` runs `verify`, so a drifted tree cannot
+reach npm. `src/version.test.ts` asserts the same invariant from the test
+suite, reading the carrier list out of `scripts/version.mjs` so the guard and
+the tool that fixes it cannot disagree about what a carrier is.
+
+The bump is deliberately not `npm version`: that command knows only
+`package.json` and commits and tags as a side effect, which would put a tag on
+the tree before the other three files and the CHANGELOG entry were written. It
+is also deliberately offline - ask npm what is already live first, then bump
+past it:
+
+```bash
+npm view @cogdepot/mcp-server version
+```
+
+Writing the CHANGELOG entry, and updating `PRIVACY.md` when what the package
+transmits has changed, stay manual. A script should not guess at either.
+
+```bash
+npm run verify:local
+```
+
+### Promoting and tagging
+
 `main` requires a pull request and passing checks, with no bypass actors. It is
 reached only through the `release` workflow, which authenticates as the
 `cogdepot-bot` GitHub App so the public release trail is not a personal account.
@@ -587,6 +660,14 @@ check and before `npm publish`, and fails closed on both a not-deployed answer
 and a could-not-check one. Neither is a basis for an irreversible publish: npm
 allows no free unpublish, so a release made on an unproven assumption is a
 deprecation notice forever, which is what 0.1.0 through 0.1.2 already are.
+
+After `npm publish`, and before the registry publish, `publish.yml` runs
+`verify:published`. That installs the tarball npm now serves and asks it what it
+advertises, because a publish can succeed and still ship the wrong thing - a
+stale `dist/`, a `files` list that omits a module, a build carrying the previous
+commit's output. It cannot prevent a bad release, only make one loud instead of
+silent; npm allows no free unpublish, so the remedy is always a follow-up
+version. Run it by hand with `npm run verify:published [version]`.
 
 The gate exists because the package points at production by default while the
 live write check refuses production, so nothing else looks there. When
