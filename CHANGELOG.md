@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+**No runtime change.** The published package behaves exactly as 0.8.0 does;
+this is release-pipeline repair.
+
+### Fixed
+
+- **`verify:published` no longer loses a race it was written to survive.** It
+  had a three-attempt retry with a 20-second backoff, and the backoff was dead
+  code: each attempt tried the exact `name@x.y.z` and then immediately fell
+  back to `name@latest` in the same pass, so the first resolvable spec broke
+  the loop before any wait.
+
+  That failed the 0.8.0 release. Three seconds after a correct `npm publish`,
+  the exact spec had not propagated to npm's CDN, `@latest` resolved instantly
+  to the still-current 0.7.0, and the version assertion failed a package that
+  was in fact published correctly. The MCP Registry steps skipped behind it,
+  and 0.8.0 reached npm without reaching the registry.
+
+  The exact spec now gets every attempt, and `@latest` is tried only on the
+  final pass. The fallback itself is kept: it exists because some npx builds
+  refuse an exact spec while resolving `@latest` for the same tarball, which is
+  still reproducible on Windows.
+
+- **`publish.yml` can be re-run for a tag that is already cut.** It gains the
+  `workflow_dispatch` that `deploy.yml` has had since 08-27, and `npm publish`
+  is skipped when npm already serves the version.
+
+  Without both, a publish that failed *after* npm succeeded was unrecoverable:
+  re-running replayed `npm publish`, npm refuses to republish a version, and
+  the run died before the steps that had never run. Two re-runs of 0.8.0 failed
+  that way. The skip is safe because `verify:published` still inspects the
+  tarball npm actually serves rather than trusting "already published".
+
+  Because `workflow_dispatch` accepts any ref and every step derives the
+  version from `GITHUB_REF`, a new first step refuses anything that is not a
+  `v*` tag - `publish.yml` has no environment to refuse a branch run the way
+  `deploy.yml`'s does.
+
 ## 0.8.0 - 2026-09-03
 
 Additive and backward-compatible: one new keyless tool (`cogdepot_get_stats`)

@@ -669,6 +669,27 @@ commit's output. It cannot prevent a bad release, only make one loud instead of
 silent; npm allows no free unpublish, so the remedy is always a follow-up
 version. Run it by hand with `npm run verify:published [version]`.
 
+**To re-run a publish for a tag that is already cut**, dispatch `publish.yml`
+from the tag:
+
+```bash
+gh workflow run publish.yml --repo cogdepot/mcp-server --ref v0.8.0
+```
+
+Run it from the tag, never a branch: every step derives the version by stripping
+`refs/tags/v` off `GITHUB_REF`, and a branch ref is refused up front rather than
+carrying `refs/heads/main` into the version checks. `npm publish` is skipped when
+npm already serves that version, so the steps after it - `verify:published` and
+the registry publish - are reachable on a re-run. The skip is safe because
+`verify:published` still inspects the tarball npm actually serves; nothing takes
+"already published" on trust.
+
+This exists because 0.8.0 needed it and did not have it. `verify:published` lost
+a propagation race three seconds after a correct publish, the registry steps
+skipped, and every re-run then failed earlier still - on `npm publish`, for a
+version npm already had. The npm release was fine; the registry entry was
+stranded, and no amount of re-running could reach it.
+
 The gate exists because the package points at production by default while the
 live write check refuses production, so nothing else looks there. When
 production is ahead of the package it passes silently, and it keeps earning its
