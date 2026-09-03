@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.1 - 2026-09-02
+## 0.7.1 - 2026-09-03
 
 Additive and backward-compatible. No tool, schema or behaviour changes; the only
 difference on the wire is one extra request header.

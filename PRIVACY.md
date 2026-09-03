@@ -1,6 +1,6 @@
 # Privacy Policy - cogDepot MCP server
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 This policy covers the `@cogdepot/mcp-server` package: the MCP server you run on
 your own machine. The cogDepot platform it talks to is governed separately by the
