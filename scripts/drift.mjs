@@ -104,6 +104,11 @@ const EXCLUDED = {
   "GET /version": "Operational, not agent-facing.",
   "GET /status.json": "Statuspage uptime feed (all-systems status, component history), not agent-facing.",
   "POST /a2a": "A2A JSON-RPC surface. A different protocol, not wrapped by MCP.",
+  "GET /a2a/health":
+    "Liveness probe for the A2A surface, and excluded twice over: it is operational " +
+    "rather than agent-facing, like GET /health above, and it belongs to the A2A " +
+    "protocol this server does not wrap, like POST /a2a beside it. An agent learns " +
+    "nothing from it that cogdepot_discover does not already state.",
 
   "POST /dashboard/credits": "Top-up. Moves money; barred from directory listing outright.",
   "POST /dashboard/keys": "Operator dashboard, not agent-facing.",
