@@ -26,8 +26,8 @@ Also changes what the wire carries on CI runs only.
   in exactly the table the User-Agent work exists to make readable.
 
   It is not the only such job overall, and 0.8.1 shipped saying it was.
-  cogDepot's own `web/scripts/mcp-drift.mjs` spawns this package under `npx`
-  and inherits the full environment minus `COGDEPOT_*`, so `CI` reaches its
+  cogDepot's own release-drift check spawns this package under `npx` and
+  inherits the full environment minus `COGDEPOT_*`, so `CI` reaches its
   child and its runs were ALWAYS marked - including before this fix existed.
   Production logs show a marked row three minutes BEFORE the fix merged and an
   unmarked row 45 minutes after it.

@@ -108,7 +108,7 @@ const transport = new StdioClientTransport({
   // 2026-09-03, eleven caller addresses, all ours, not one carrying the suffix.
   //
   // Not the only one overall, which matters when reading that table. cogDepot's
-  // own web/scripts/mcp-drift.mjs also spawns this package under npx, and it
+  // own release-drift check also spawns this package under npx, and it
   // inherits the full environment minus COGDEPOT_*, so CI reaches its child and
   // its runs were ALWAYS marked - including before this fix existed. The suffix
   // is therefore not a timeline: it means the caller had CI set, nothing more.

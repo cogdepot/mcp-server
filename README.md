@@ -645,9 +645,9 @@ npm run verify:local
 **A publish here blocks cogDepot production deploys until its docs catch up.**
 Not a courtesy - a hard gate, and it has fired twice.
 
-cogDepot's `web/scripts/mcp-drift.mjs` compares npm's `dist-tags.latest`
-against every version claim in its own documents, and it gates both
-`deploy-production.yml` and `deploy-storefront-production.yml`. The moment a
+cogDepot runs a release-drift check that compares npm's `dist-tags.latest`
+against every version claim in its own documents, and that check gates both of
+its production deploy workflows. The moment a
 new version reaches npm, those claims are stale and cogDepot cannot deploy
 production until someone updates them.
 
@@ -661,9 +661,9 @@ already blocked. Say so first and the doc update ships alongside the release
 instead of after it.
 
 **Say more than the version when the tool set changes.** A new or removed tool
-also needs classifying in that script's `KNOWN_TOOLS` allowlist, needs
-`MCPToolCount` and `MCPKeylessToolCount` bumped in `internal/config/mcp.go`,
-and needs a clause in four separate prose enumerations that a Go test counts.
+also needs classifying in that check's tool allowlist, needs its total and
+keyless tool counts bumped in cogDepot's own configuration, and needs a clause
+in four separate prose enumerations that a test over there counts.
 `cogdepot_get_stats` needed all of it. A version-only bump like 0.8.1 needs
 none of it.
 
