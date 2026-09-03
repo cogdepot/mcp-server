@@ -20,6 +20,18 @@ name: publish
 on:
   push:
     tags: ["v*"]
+  # Re-run a publish for a tag that is already cut. deploy.yml has had this
+  # since 08-27 and publish.yml did not, which cost 0.8.0 its registry entry:
+  # verify:published failed on a propagation race three seconds after a correct
+  # npm publish, the registry steps skipped, and there was no way back. Re-running
+  # the job replays `npm publish`, which npm refuses for a version it already
+  # serves, so every retry failed earlier than the one that mattered.
+  #
+  # Run it FROM THE TAG, not from a branch. Every step reads the version out of
+  # GITHUB_REF, and the guard below refuses a ref that is not a v* tag rather
+  # than publishing something mislabelled - publish.yml has no environment to
+  # refuse it the way deploy.yml's does.
+  workflow_dispatch:
 
 permissions:
   id-token: write # OIDC, for npm trusted publishing AND mcp-publisher
@@ -93,6 +105,18 @@ jobs:
         # stays useful anyway: a production rollback would trip it again.
         run: npm run route-ready:prod
 
+      - name: The ref must be a v* tag
+        # workflow_dispatch accepts any ref. Everything downstream derives the
+        # version by stripping refs/tags/v off GITHUB_REF, so a branch run would
+        # carry "refs/heads/main" as its version into the checks below and only
+        # fail once it reached npm. Refuse it here, where the message says why.
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in
+            refs/tags/v*) echo "ref: $GITHUB_REF" ;;
+            *) echo "::error::$GITHUB_REF is not a v* tag. Dispatch this workflow from the release tag."; exit 1 ;;
+          esac
+
       - name: Version must match the tag in all three places
         run: |
           set -euo pipefail
@@ -115,7 +139,22 @@ jobs:
       - name: Publish to npm
         # No NODE_AUTH_TOKEN. Trusted publishing supplies the credential from
         # the OIDC token above, and provenance is attached by default.
-        run: npm publish --access public
+        #
+        # Skipped when npm already serves this version, which is what makes a
+        # re-run useful. npm refuses to republish a version and allows no free
+        # unpublish, so without this guard the only failure mode of a re-run is
+        # the step that already succeeded, and the steps that did NOT run - the
+        # registry publish - stay unreachable forever. Skipping is safe because
+        # the very next step re-verifies the artefact npm actually serves; it
+        # does not take "already published" on trust.
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if npm view "@cogdepot/mcp-server@$VERSION" version >/dev/null 2>&1; then
+            echo "npm already serves $VERSION. Skipping publish; the next step still verifies it."
+            exit 0
+          fi
+          npm publish --access public
 
       - name: The published package must advertise what was built
         # Everything before this tested the SOURCE. This installs the tarball

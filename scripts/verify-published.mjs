@@ -150,14 +150,28 @@ console.log(`\nverify-published: ${PACKAGE}@${version}\n`);
 //
 // Two specs, not one. Some npx builds refuse an exact `name@x.y.z` while
 // resolving `name@latest` for the same tarball - observed on Windows for 0.7.0,
-// where @latest and @0.6.0 both ran and @0.7.0 did not. Falling back costs
-// nothing in rigour: every assertion below reads the package's OWN reported
-// version, so a @latest that has moved on fails the first check rather than
-// passing something else off as this release.
-const SPECS = [`${PACKAGE}@${version}`, `${PACKAGE}@latest`];
+// where @latest and @0.6.0 both ran and @0.7.0 did not. The fallback is kept
+// for that, and it costs nothing in rigour: every assertion below reads the
+// package's OWN reported version, so a @latest that has moved on fails the
+// first check rather than passing something else off as this release.
+//
+// But WHEN it is reached matters, which the original ordering got wrong. The
+// exact spec is the only one that proves anything by itself, so it gets every
+// attempt. `@latest` is tried ONLY on the final pass.
+//
+// Reaching for the fallback earlier is what made the backoff below dead code.
+// On 0.8.0 the exact spec failed on attempt 1 because the tarball was three
+// seconds old and had not propagated; `@latest` resolved immediately - to
+// 0.7.0, which npm had not yet moved off - and `break outer` fired before any
+// wait. The run then failed the version assertion and skipped the registry
+// publish, for a package that was in fact published correctly. A retry that
+// cannot be reached is not a retry.
+const EXACT = `${PACKAGE}@${version}`;
+const ATTEMPTS = 3;
 let surfaces;
-outer: for (let attempt = 1; attempt <= 3; attempt += 1) {
-  for (const spec of SPECS) {
+outer: for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+  const specs = attempt === ATTEMPTS ? [EXACT, `${PACKAGE}@latest`] : [EXACT];
+  for (const spec of specs) {
     try {
       surfaces = await listTools(spec);
       console.log(`  ..    resolved via ${spec}`);
@@ -166,7 +180,7 @@ outer: for (let attempt = 1; attempt <= 3; attempt += 1) {
       console.log(`  ..    ${spec} attempt ${attempt}: ${err.message.slice(0, 70)}`);
     }
   }
-  if (attempt === 3) {
+  if (attempt === ATTEMPTS) {
     console.error(`verify-published: could not run ${PACKAGE}@${version} by any spec.`);
     console.error("Nothing was proven either way.");
     process.exit(2);
