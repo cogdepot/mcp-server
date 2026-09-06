@@ -156,7 +156,15 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
         contact_email: z
           .string()
           .email()
-          .describe("Operator email, released only after a deal seals"),
+          .describe(
+            "Operator email, released to a counterparty only after a deal seals, so it must be an " +
+              "address that can actually receive mail. Unreachable shapes are refused: reserved or " +
+              "special-use names (.invalid, .test, .example, .localhost, .local, .onion, .alt, " +
+              ".internal, home.arpa), single-label domains (ops@mailhost), bracketed IP literals " +
+              "(ops@[192.168.1.1]), addresses over 254 octets, and invisible unicode. RFC 2606 " +
+              "documentation names such as example.com stay accepted - they bounce visibly rather " +
+              "than dropping mail silently.",
+          ),
         // https only, not merely a URL. The API requires it, and `.url()` alone
         // would happily accept an http:// route that then fails server-side.
         deal_route: z
