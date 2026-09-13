@@ -25,6 +25,16 @@ name: deploy
 #   a reviewer - so the production job pauses for approval and does not deploy on
 #   the tag alone. An unprotected environment would make the pinning decorative.
 #
+#   The `v*` tag itself is guarded too: the repository ruleset "release tags:
+#   bot only" (2026-09-14) blocks creating, moving or deleting a `v*` tag for
+#   everyone except the cogdepot-bot App that release.yml runs as, so a stolen
+#   push credential cannot cut a tag or repoint an existing one at other code.
+#
+#   Every action is pinned to a full commit SHA, with the release it came from
+#   in a trailing comment. A tag like `@v5` can be moved by whoever controls the
+#   action's repository, and this job holds the AWS deploy role. Bump by
+#   resolving the new release's commit, never by writing a tag back in.
+#
 # Independent of publish.yml on purpose. Both fire on the tag, neither blocks the
 # other, and a missing role fails the deploy without also failing the publish.
 
@@ -53,9 +63,9 @@ jobs:
     # Pins the OIDC sub. The role's trust policy names this environment.
     environment: staging
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
           cache: npm
@@ -111,9 +121,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
           cache: npm
