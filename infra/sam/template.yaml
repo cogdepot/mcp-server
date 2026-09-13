@@ -95,11 +95,45 @@ Conditions:
   # Empty DomainName => dormant deploy (no domain, no mapping, no Route53).
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
 
+  # Retention differs by stage: staging carries connector smoke traffic with no
+  # forensic value, production is the agent-facing front door.
+  IsProduction: !Equals [!Ref Stage, production]
+
 Resources:
   McpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: $default
+      # J3 (cogDepot docs/security-review-plan.md). The MCP surface is the
+      # agent-facing front door and was the last API in the estate with no access
+      # log: the Lambda records what it chooses to record, which by definition
+      # excludes every request rejected BEFORE it reached the handler - an
+      # unauthenticated probe, a bad OAuth token, a malformed envelope. Those are
+      # exactly the requests a security review needs and could not get.
+      #
+      # Format is byte-identical to the cogDepot API and storefront settings so a
+      # single CloudWatch Insights query reads all three. The query string is
+      # deliberately absent: an OAuth code or token can ride there, and a
+      # credential in a log is a credential leaked.
+      AccessLogSettings:
+        DestinationArn: !GetAtt McpAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","path":"$context.path","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","userAgent":"$context.identity.userAgent","integrationStatus":"$context.integrationStatus","integrationError":"$context.integrationErrorMessage"}'
+
+  # Declared explicitly. Unlike /aws/lambda/<fn>, which Lambda creates on first
+  # invoke, nothing creates an API Gateway access-log group but this - and if it
+  # is absent, delivery fails SILENTLY, which is the failure mode this resource
+  # exists to prevent.
+  #
+  # No CloudWatch Logs resource policy is needed: an HTTP API (v2) writes access
+  # logs without one. Verified 2026-09-05 against the cogDepot storefront's own
+  # HTTP API, which has logged since 2026-08-17 with zero resource policies in
+  # the account. (A sibling change briefly added one on the opposite assumption
+  # and was reverted - do not re-add it.)
+  McpAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/cogdepot-mcp-${Stage}
+      RetentionInDays: !If [IsProduction, 90, 30]
 
   # The custom domain, its ACM mapping and the Route53 alias were a SAM `Domain:`
   # block on McpApi. They are spelled out as raw resources so each can carry a

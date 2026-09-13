@@ -173,8 +173,19 @@ export class CogDepotClient {
       // on every failure put a network call on every error path, including a
       // cold-cache round trip inside the handling of a 401 - latency added to
       // failures, for a value the message would then discard.
-      const needsTopUp = problem.reason === "insufficient_funds_self";
-      throw describeProblem(response.status, problem, needsTopUp ? await topUpPointer() : undefined);
+      // this.#credential is defined here - request() throws MissingApiKeyError
+      // before reaching a response - so its kind selects the top-up wording: a
+      // relayed bearer token cannot buy credits, an api-key can. Only the api-key
+      // branch of the message consumes the pointer, so gate the fetch on the kind
+      // too and keep the cold-cache round trip off the bearer error path.
+      const needsTopUp =
+        problem.reason === "insufficient_funds_self" && this.#credential.kind === "api-key";
+      throw describeProblem(
+        response.status,
+        problem,
+        needsTopUp ? await topUpPointer() : undefined,
+        this.#credential.kind,
+      );
     }
 
     return raw as T;

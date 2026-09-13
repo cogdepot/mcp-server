@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.8.1";
+export const SERVER_VERSION = "0.8.2";
 
 /**
  * The User-Agent every outbound request from this package carries.
@@ -202,7 +202,7 @@ export const TOOL_RATE_DEAL = "cogdepot_rate_deal";
 export const TITLE_GET_ACCOUNT = "Check cogDepot balance and standing";
 export const TITLE_UPDATE_PROFILE = "Set cogDepot contact details and deal route";
 export const TITLE_GET_DOMAIN_CHALLENGE = "Get the domain-verification token";
-export const TITLE_VERIFY_DOMAIN = "Verify a domain for the free credit grant";
+export const TITLE_VERIFY_DOMAIN = "Verify a domain for a one-time credit grant";
 export const TITLE_GET_THREAD = "Read a cogDepot negotiation thread";
 export const TITLE_GET_DEAL = "Read a sealed cogDepot deal";
 export const TITLE_RATE_DEAL = "Rate a cogDepot counterparty";
@@ -251,13 +251,13 @@ export const DESCRIPTION_UPDATE_PROFILE = [
 ].join(" ");
 
 export const DESCRIPTION_GET_DOMAIN_CHALLENGE = [
-  "Returns the one-time token to publish at a domain's apex in order to claim the free credit grant.",
+  "Returns the one-time token to publish at a domain's apex in order to claim a credit grant where the deployment offers one.",
   "Requires an API key. Free - not metered, and reading the token grants nothing on its own.",
   "Follow it with cogdepot_verify_domain once the token is served. One grant per domain and one per account.",
 ].join(" ");
 
 export const DESCRIPTION_VERIFY_DOMAIN = [
-  "Checks that a domain is serving the verification token and, if so, credits the free grant to the account.",
+  "Checks that a domain is serving the verification token and, where the deployment offers a grant, credits it to the account.",
   "Requires an API key. Free - not metered, and it is the only way to fund an account without paying.",
   "Call cogdepot_get_domain_challenge first and publish the token. Do NOT call this repeatedly while waiting for DNS or a deploy to propagate: repeated failures are rate limited per account.",
 ].join(" ");
@@ -298,7 +298,7 @@ export const DESCRIPTION_DISCOVER = [
 export const DESCRIPTION_GET_STARTED = [
   "Explains, in order, how to obtain a cogDepot API key and become able to trade.",
   "Requires no API key and spends no credits: this is the tool to call when the user has no cogDepot account yet, or when another tool has reported a missing or unfunded key.",
-  "Covers all three ways a key is issued and how each one is funded, including the free domain-verification grant.",
+  "Covers all three ways a key is issued and how each one is funded, including the domain-verification grant where a deployment offers one.",
   "Returns instructions for a human or agent to follow. It does NOT create an account and does not send any request on the user's behalf.",
 ].join(" ");
 
@@ -524,7 +524,7 @@ export const DESCRIPTION_RESOURCE_OVERVIEW =
   "What cogDepot is, what it costs, and where its machine-readable contracts live. Read from the live discovery document; free and unauthenticated.";
 
 export const DESCRIPTION_RESOURCE_ONBOARDING =
-  "The routes to a cogDepot API key and the free domain-verification credit grant. Free and unauthenticated.";
+  "The routes to a cogDepot API key and the domain-verification credit grant where a deployment offers one. Free and unauthenticated.";
 
 export const DESCRIPTION_RESOURCE_PRICING =
   "Every cogDepot fee and credit cost, read from the live discovery document. Free and unauthenticated.";

@@ -102,6 +102,31 @@ response. A token that fails verification is refused with a `401`; a request wit
 no token is served the keyless tools. No token is sent anywhere other than the
 `cogdepot.com` host the base URL already constrains.
 
+## What the hosted server logs
+
+This section is about the hosted server at `mcp.cogdepot.com` only. The npm
+package you run locally still logs nothing to any remote destination - that is
+unchanged, and it is what the "What it collects" section above describes.
+
+Since 2026-09-05 the hosted server keeps an ordinary HTTP access log. Per
+request it records the time, the source IP address, the method, the route and
+path, the response status, the response size, the latency, and the `User-Agent`
+your client sent to it. (It records that `User-Agent` even though, as noted
+above, it does not forward it onward to the API.)
+
+It does **not** record request or response bodies, request headers, or the query
+string. That is deliberate and it is the reason the guarantees above still hold
+exactly as written: your API key and, in OAuth mode, your access token travel in
+the `Authorization` header, so neither appears in this log.
+
+Entries are deleted after 90 days on the production deployment and 30 days on
+staging.
+
+Why it exists, stated plainly: without it a request refused before it reached the
+server's own code - an unauthenticated probe, a rejected token, a malformed
+envelope - left no trace at all, which made it impossible to tell ordinary
+internet background noise from someone actually attacking the service.
+
 ## Retention
 
 This package retains nothing between runs. It writes no files, no cache and no

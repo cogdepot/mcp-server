@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.8.2 - 2026-09-13
+
+Error and description wording catches up to cogDepot's tightened account
+validation, and the MCP HTTP API gains access logging. No tool was added or
+removed, and nothing the package sends on the wire changed.
+
+### Added
+
+- **Access logging on the MCP HTTP API.** The agent-facing surface was the last
+  API in the estate with no per-request access log, so a request rejected before
+  it reached the handler - an unauthenticated probe, a bad token, a malformed
+  envelope - left no record at all. A dedicated log group now captures request
+  id, source IP, method, route, status, latency and user agent. The query string
+  and all headers are deliberately omitted, so the API key and the OAuth access
+  token, both carried in `Authorization`, are never written. `PRIVACY.md`
+  discloses it.
+
+### Changed
+
+- **The insufficient-credits (402) message now names how to top up.** It states
+  that a top-up needs the account's API key and a payment processor, instead of a
+  bare "top up here" that left a caller with no usable route. A session
+  authenticating with a relayed access token is told the operator has to add
+  credit outside the session, because that token cannot buy credits. The message
+  no longer promises specific error text it does not always produce: single-label
+  domains and bracketed IP literals are rejected before the request is sent,
+  while reserved-name shapes reach the API and come back as a rejection.
+- **The domain grant is described as conditional, not guaranteed.** The 402
+  message, the tool and resource descriptions, and the README now say a one-time
+  grant is available where the deployment offers one, rather than an
+  unconditional free grant. A deployment can offer none.
+- **`cogdepot_update_profile`'s `contact_email` teaches the deliverability
+  rule.** Reserved and special-use names, single-label domains, bracketed IP
+  literals, over-length addresses and invisible unicode are refused, so an agent
+  learns the rule from the tool definition rather than from a rejection.
+
+### Internal
+
+- The drift guard no longer excludes two dashboard operations that cogDepot
+  removed from its published OpenAPI. Not part of the published package.
+
 ## 0.8.1 - 2026-09-03
 
 **No change to any tool, schema or published behaviour.** `dist/` is identical

@@ -62,6 +62,7 @@ export function describeProblem(
   status: number,
   problem: ProblemDocument,
   topUpUrl?: string,
+  credentialKind?: "api-key" | "bearer",
 ): ApiError {
   const reason = typeof problem.reason === "string" ? problem.reason : `http_${status}`;
 
@@ -70,21 +71,43 @@ export function describeProblem(
       const have = numeric(problem.creditsRemaining) ?? 0;
       const need = numeric(problem.creditsRequired) ?? 0;
       const shortfall = Math.max(0, need - have);
+      const head =
+        `Not enough credits: this call needs ${need} and the balance is ${have}, ` +
+        `so it is ${shortfall} short.`;
+      // The domain grant is conditional - one per account, not for tunnel
+      // hostnames, capped per day, and a deployment can offer none - so this
+      // points at it as a possibility rather than promising a free grant.
+      const domainGrant =
+        " A domain you control may earn a one-time grant where the deployment offers one" +
+        " - call cogdepot_get_domain_challenge.";
+      // A relayed Cognito access token (the hosted mcp.cogdepot.com OAuth path,
+      // credential kind "bearer") cannot buy credits: POST /dashboard/credits
+      // takes an API key or a console ID token and answers a Bearer access token
+      // with 401. Naming that call to a bearer caller sends it at a locked door,
+      // so point at the operator instead of a route the session cannot use.
+      if (credentialKind === "bearer") {
+        return new ApiError(
+          status,
+          reason,
+          `${head} This session's access token cannot buy credits, so the operator has to add` +
+            ` credit outside this session - with the account's API key (POST /dashboard/credits` +
+            ` and a processor) or the web dashboard.${domainGrant}`,
+          false,
+        );
+      }
       // Take only the route, not the whole sentence. The live fact reads
       // "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains",
       // and passing that through would hand a model the crypto payment routes
       // this mapping exists to strip from the x402 `accepts` array. Splitting
       // on the dash keeps the pointer live-sourced without the payload.
       const route = topUpUrl?.split(" - ")[0]?.trim();
-      const topUp = route ? ` Top up with ${route}.` : "";
-      return new ApiError(
-        status,
-        reason,
-        `Not enough credits: this call needs ${need} and the balance is ${have}, ` +
-          `so it is ${shortfall} short.${topUp} A domain you control can be verified for a free grant ` +
-          `- call cogdepot_get_domain_challenge.`,
-        false,
-      );
+      // A processor (opennode or blockbee) is now required on production - an
+      // omitted one is a 400 - and naming it works before and after cogDepot
+      // deploys, so it is always stated alongside the API-key requirement.
+      const topUp = route
+        ? ` Top up with ${route} using this account's API key and a processor (opennode or blockbee).`
+        : "";
+      return new ApiError(status, reason, `${head}${topUp}${domainGrant}`, false);
     }
 
     case "profile_incomplete_self": {
