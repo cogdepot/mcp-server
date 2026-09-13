@@ -113,8 +113,6 @@ const EXCLUDED = {
   "POST /dashboard/credits": "Top-up. Moves money; barred from directory listing outright.",
   "POST /dashboard/keys": "Operator dashboard, not agent-facing.",
   "POST /dashboard/keys/rotate": "Operator dashboard, not agent-facing.",
-  "PUT /dashboard/contact": "Operator dashboard; the agent twin is /v1/account/contact.",
-  "PUT /dashboard/route": "Operator dashboard; the agent twin is /v1/account/route.",
   "POST /webhooks/blockbee": "Payment webhook. Called by the provider, never by a client.",
   "POST /webhooks/opennode": "Payment webhook. Called by the provider, never by a client.",
   // Note: POST /v1/account/web is NOT listed here. It exists in the API's
