@@ -47,6 +47,10 @@ describe("describeProblem", () => {
     expect(error.message).toContain("balance is 3");
     expect(error.message).toContain("197 short");
     expect(error.message).toContain("POST /dashboard/credits");
+    // Top-up now requires the account's API key and a processor; a bare
+    // "top up here" is what let a stranger sign up again instead of paying.
+    expect(error.message).toMatch(/api key/i);
+    expect(error.message).toMatch(/processor/i);
     expect(error.message).not.toContain("0xdeadbeef");
     expect(error.message).not.toMatch(/base|USDC|payTo/);
     expect(error.retryable).toBe(false);
@@ -65,6 +69,53 @@ describe("describeProblem", () => {
 
     expect(error.message).toContain("POST /dashboard/credits");
     expect(error.message).not.toMatch(/Lightning|USDT|USDC|chains/);
+  });
+
+  it("names the API key and a processor on the api-key top-up path", () => {
+    // A processor (opennode or blockbee) is required on production now; an
+    // omitted one is a 400. Always stating it works before and after deploy.
+    const error = describeProblem(
+      402,
+      asProblem({ reason: "insufficient_funds_self", creditsRemaining: 0, creditsRequired: 50 }),
+      "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains.",
+      "api-key",
+    );
+
+    expect(error.message).toMatch(/Top up with POST \/dashboard\/credits/);
+    expect(error.message).toMatch(/api key/i);
+    expect(error.message).toMatch(/opennode/);
+    expect(error.message).toMatch(/blockbee/);
+  });
+
+  it("tells a bearer (relayed access token) caller the operator must add credit, not to make the call", () => {
+    // POST /dashboard/credits takes an API key or a console ID token and answers
+    // a relayed OAuth access token with 401, so naming it as the caller's next
+    // action points a bearer session at a door locked for it.
+    const error = describeProblem(
+      402,
+      asProblem({ reason: "insufficient_funds_self", creditsRemaining: 0, creditsRequired: 200 }),
+      "POST /dashboard/credits - Lightning or USDT/USDC on multiple chains.",
+      "bearer",
+    );
+
+    expect(error.message).toMatch(/operator/i);
+    expect(error.message).toMatch(/cannot buy credits/i);
+    // It must not instruct the bearer caller to perform the top-up itself.
+    expect(error.message).not.toMatch(/Top up with POST/);
+    expect(error.message).not.toMatch(/Lightning|USDT|USDC|chains/);
+  });
+
+  it("qualifies the domain grant as conditional rather than promising a free one", () => {
+    const error = describeProblem(
+      402,
+      asProblem({ reason: "insufficient_funds_self", creditsRemaining: 0, creditsRequired: 10 }),
+      "POST /dashboard/credits",
+    );
+
+    expect(error.message).toMatch(/one-time grant where the deployment offers one/);
+    expect(error.message).toContain("cogdepot_get_domain_challenge");
+    // The old wording promised "a free grant" unconditionally; ensure it is gone.
+    expect(error.message).not.toMatch(/verified for a free grant/);
   });
 
   it("renders 428 next steps as numbered instructions rather than JSON", () => {
@@ -358,6 +409,30 @@ describe("CogDepotClient", () => {
     const headers = (fetchImpl.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
     expect(headers["authorization"]).toBe("Bearer access-token-xyz");
     expect(headers["x-api-key"]).toBeUndefined();
+  });
+
+  it("renders an insufficient-funds 402 for a bearer session as operator-must-add-credit, end to end", async () => {
+    // Guards the one line that wires credential kind into the message. A hosted
+    // bearer session that hits this 402 must be told the operator adds credit
+    // outside the session, not to call POST /dashboard/credits, which its access
+    // token 401s on. If the wiring regressed to a fixed kind, the unit tests one
+    // level down would still pass while a bearer caller got a call it cannot make.
+    // The bearer path needs no top-up pointer, so the request is the only fetch.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      response({ reason: "insufficient_funds_self", creditsRemaining: 0, creditsRequired: 200 }, 402),
+    );
+    const client = new CogDepotClient(
+      { kind: "bearer", value: "access-token-xyz" },
+      "https://api.example.com",
+      fetchImpl as never,
+    );
+
+    const err = await client.request("/v1/deals/x/ratings", { method: "POST", body: {} }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toMatch(/operator/i);
+    expect(err.message).toMatch(/cannot buy credits/i);
+    expect(err.message).not.toMatch(/Top up with POST/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("sends an explicit api-key credential as x-api-key, like the bare-string form", async () => {
