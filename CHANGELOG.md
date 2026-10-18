@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The MCP HTTP API is throttled and its function capped** (cogDepot api-check
+  M1, 2026-10-18). The stage ran at the account's 10,000 rps default with no
+  edge in front, so an unauthenticated flood was a bill with no ceiling and could
+  take the unreserved Lambda pool the cogDepot API shares. The stage is now held
+  to 25 rps (burst 50) and the function to 20 reserved concurrent executions.
+  Deploy only after cogDepot's Terraform grants the MCP deploy role
+  `lambda:PutFunctionConcurrency`, or the stack update fails AccessDenied.
+
 ## 0.8.2 - 2026-09-13
 
 Error and description wording catches up to cogDepot's tightened account
