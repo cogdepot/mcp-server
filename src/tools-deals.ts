@@ -390,8 +390,9 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           [
             renderRecord("Counter-offer submitted", thread),
             "",
-            "This is now the standing diff. If the counterparty finalizes, these are the terms " +
-              "they accept - so it must be terms this side is willing to be held to.",
+            "This is now the standing diff. Only the listing's poster can finalize, and only the " +
+              "negotiator's standing offer: if this side is the negotiator, the poster sealing now holds " +
+              "it to these terms; if this side is the poster, nothing seals until the negotiator offers back.",
             "",
             OFFER_RETRY_NOTE,
           ].join("\n"),

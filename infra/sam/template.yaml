@@ -115,6 +115,30 @@ Resources:
       # single CloudWatch Insights query reads all three. The query string is
       # deliberately absent: an OAuth code or token can ride there, and a
       # credential in a log is a credential leaked.
+      # cogDepot api-check M1 (2026-10-18): this stage had no throttle, so it ran
+      # at the account's 10,000 rps default - unauthenticated, no CloudFront in
+      # front, billed per request, and every call fans into the cogDepot API,
+      # which is held to 50 rps. 25 rps (burst 50) is half the API's budget, so an
+      # MCP flood can no longer use the API's whole share through this door.
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 25
+        ThrottlingBurstLimit: 50
+      # The sign-in routes get their own route keys and buckets (the events
+      # below), so a flood on the catch-all cannot 429 an operator's OAuth sign-in
+      # too. A sign-in is a handful of requests; 10 rps each is far above it.
+      RouteSettings:
+        "ANY /.well-known/oauth-authorization-server":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /.well-known/oauth-protected-resource":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /oauth/authorize":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /oauth/token":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
       AccessLogSettings:
         DestinationArn: !GetAtt McpAccessLogGroup.Arn
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","path":"$context.path","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","userAgent":"$context.identity.userAgent","integrationStatus":"$context.integrationStatus","integrationError":"$context.integrationErrorMessage"}'
@@ -179,6 +203,25 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub cogdepot-mcp-${Stage}
+      # cogDepot api-check (2026-10-18): the deploy role may create or update
+      # this function's role only with this boundary attached, which caps it at
+      # writing the function's own log group whatever else is attached to it or
+      # whoever may assume it. The policy is cogDepot's Terraform
+      # (iam_mcp.tf mcp_function_boundary); apply that first, or the role
+      # update is denied and the deploy rolls back.
+      PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/cogdepot-mcp-${Stage}-function-boundary
+      # cogDepot api-check M1: unreserved, a flood here could take the account's
+      # whole unreserved pool, which the cogDepot API Lambda shares. 50 matches
+      # the catch-all's burst; steady state is about 2 concurrent (25 rps at the
+      # ~80 ms average), and production's 30-day peak to 2026-10-18 was 13. It
+      # is one pool for every route: the OAuth buckets above can admit up to 80
+      # more at once, and a slow flood on / can hold all 50, so either can still
+      # come back as Lambda throttles (5xx), sign-in included.
+      # Needs the lambda:PutFunctionConcurrency and DeleteFunctionConcurrency
+      # grants in cogDepot's iam_mcp.tf applied first. Otherwise the deploy fails
+      # AccessDenied and the rollback, denied DeleteFunctionConcurrency, leaves
+      # the stack in UPDATE_ROLLBACK_FAILED until an admin recovers it.
+      ReservedConcurrentExecutions: 50
       CodeUri: ../../lambda-dist
       Handler: index.handler
       Environment:
@@ -203,6 +246,30 @@ Resources:
           Properties:
             ApiId: !Ref McpApi
             Path: /{proxy+}
+            Method: ANY
+        OAuthServerMetadata:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /.well-known/oauth-authorization-server
+            Method: ANY
+        OAuthResourceMetadata:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /.well-known/oauth-protected-resource
+            Method: ANY
+        OAuthAuthorize:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /oauth/authorize
+            Method: ANY
+        OAuthToken:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /oauth/token
             Method: ANY
 
 Outputs:

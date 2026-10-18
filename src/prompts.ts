@@ -269,6 +269,7 @@ function registerCloseOutADeal(server: McpServer): void {
           "   - cannot be undone",
           "   - releases my contact details and deal route to the counterparty, ending the anonymity permanently",
           `   - is poster-only, so if I did not post the listing, ${TOOL_FINALIZE_DEAL} will refuse and nothing will be charged`,
+          "   - seals only the negotiator's standing offer: if it is the negotiator's turn (the standing offer is my own counter), it answers 409 out_of_turn and nothing is charged, so wait for them to offer back",
           `4. Only on my explicit yes, call ${TOOL_FINALIZE_DEAL}.`,
           `5. Afterwards, call ${TOOL_GET_DEAL} for the reveal and tell me the handover window before it expires.`,
           `6. Finally, offer to call ${TOOL_RATE_DEAL}. Rating has its own window and one rating per side.`,

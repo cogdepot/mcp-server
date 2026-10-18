@@ -246,7 +246,7 @@ export function renderOnboarding(result: FactsResult): string {
 
   lines.push(
     "",
-    "Once a key is issued it is returned exactly once and never re-issued. Store it before continuing; a lost key is rotated, not recovered.",
+    "Once a key is issued it is returned exactly once and never re-issued. Store it before continuing: a lost key is never recovered. An account made on the web can rotate it from the console, but one registered through the API has no other way in, so for it a lost or leaked key means a lost account.",
     "",
     `Operators can also sign up on the web at ${SITE_URL}/auth/signup.`,
   );

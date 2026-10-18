@@ -356,7 +356,10 @@ COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
 `scripts/build-lambda.mjs` bundles the handler for deployment and
 `infra/sam/template.yaml` is the Lambda + API Gateway + custom-domain stack; both
 the deployment and the local runner drive the same web-standard `fetch` handler
-`createRemoteHandler` returns.
+`createRemoteHandler` returns. The stack holds the HTTP API to 25 rps (burst 50)
+and the function to 50 reserved concurrent executions, so a flood here cannot
+spend the cogDepot API's 50 rps or its share of the Lambda pool; the four OAuth
+sign-in routes have their own 10 rps buckets.
 
 ### Deploying the remote server
 
@@ -383,6 +386,19 @@ publishes to npm and deploys staging on its own, then waits for an approval
 before production. A release is not finished when the tag lands; it is finished
 when that approval is given.
 
+**A deploy that adds an API Gateway access log needs the deploy role's CloudWatch
+Logs permissions in place first.** 0.8.2 added an access-log group to the MCP HTTP
+API, and the first two production attempts failed in the stage update because the
+role in `iam_mcp.tf` carried no Logs statement. Two gaps bit in order:
+`logs:CreateLogGroup`, to create the group the template declares, then
+`logs:PutResourcePolicy` and `logs:DescribeResourcePolicies` - API Gateway
+pre-checks the caller against the full documented logging permission set and fails
+closed on any missing member, even ones it never uses, so the stage refused to
+enable logging although the account holds no Logs resource policy. Grant
+create/delete/tag/retention on the access-log group ARN plus those two, matching
+the main API stack role, before shipping a template that adds an access log.
+Staging fails first, so production is never reached on this failure.
+
 **To deploy by hand** - a first-time stack, or a release whose deploy job failed
 - the same three steps run locally. Check what is live first:
 
@@ -401,7 +417,7 @@ npm run build:lambda
 ```
 
 ```bash
-aws cloudformation package --template-file infra/sam/template.yaml --s3-bucket cogdepot-production-sam-artifacts-$(aws sts get-caller-identity --query Account --output text) --output-template-file infra/sam/.packaged-production.yaml
+aws cloudformation package --template-file infra/sam/template.yaml --s3-bucket cogdepot-production-sam-artifacts-$(aws sts get-caller-identity --query Account --output text) --s3-prefix mcp-server --output-template-file infra/sam/.packaged-production.yaml
 ```
 
 The packaged template is gitignored: it names an S3 object that exists in one
@@ -655,10 +671,13 @@ production until someone updates them.
 |---|---|
 | 0.8.0, 08:08Z | 3 claims - an unclassified `cogdepot_get_stats`, the keyless tool count, ten 0.7.0 version strings |
 | 0.8.1, 12:23Z | 9 version claims |
+| 0.8.2, 20:54Z | nothing - the publish-notice went first, so cogDepot staged its 9 version claims and merged them alongside the release |
 
-Both times cogDepot found out by running the gate itself, with production
-already blocked. Say so first and the doc update ships alongside the release
-instead of after it.
+The first two times cogDepot found out by running the gate itself, with
+production already blocked. 0.8.2 was the first release announced before the
+publish: cogDepot staged the claims while npm was still on 0.8.1 and landed them
+right after it moved, and the gate never fired. Say so first and the doc update
+ships alongside the release instead of after it.
 
 **Say more than the version when the tool set changes.** A new or removed tool
 also needs classifying in that check's tool allowlist, needs its total and

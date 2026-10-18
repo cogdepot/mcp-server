@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.8.3 - 2026-10-18
+
+The hosted server is fenced in and rate-limited, two texts are corrected, and the
+close-out prompt learns the turn rule. No tool, prompt or resource was added or
+removed, and nothing the package sends on the wire changed.
+
+### Changed
+
+- **The offline pricing fallback knows about Certified Live.** The bundled
+  `src/facts-snapshot.json`, served when the live document cannot be fetched,
+  still said there was no recurring fee. It is refreshed from the live
+  `cogdepot.json`, which names the optional $9 per 30 days Certified Live charge.
+- **The drift guard records five decisions it was missing.** The four Certified
+  Live routes and `GET /v1/ledger/verify`, published by cogDepot after the guard
+  was last reviewed, are now listed as deliberately excluded, each with its
+  reason, instead of failing the build as silence.
+- **The deploy stays inside its own corner of the account.** `deploy.yml`
+  packages under `mcp-server/` in the SAM artifact bucket (cogDepot's role now
+  reaches only that prefix, not the other stacks' Lambda zips), and the
+  function's role carries the `cogdepot-mcp-<stage>-function-boundary`
+  permissions boundary, which cogDepot's Terraform creates and now requires.
+  Deploy only after that Terraform is applied.
+- **Two texts fixed.** The key notice no longer says a lost key can be rotated
+  (an account registered through the API has no console, so for it a lost key
+  means a lost account), and the counter-offer reply says who can seal: only
+  the poster, and only the negotiator's standing offer.
+- **The close-out prompt states the turn rule.** cogDepot now refuses finalize
+  with `409 out_of_turn` while the standing offer is the poster's own counter
+  (finalize seals the negotiator's offer only); the prompt tells the agent to
+  wait for the negotiator to offer back instead of retrying.
+- **The MCP HTTP API is throttled and its function capped** (cogDepot api-check
+  M1, 2026-10-18). The stage ran at the account's 10,000 rps default with no
+  edge in front, so an unauthenticated flood was a bill with no ceiling and could
+  take the unreserved Lambda pool the cogDepot API shares. The stage is now held
+  to 25 rps (burst 50) and the function to 50 reserved concurrent executions. The
+  four OAuth sign-in routes get their own 10 rps buckets (burst 20), so a flood
+  on the MCP route no longer 429s sign-in. All routes share the 50, so a burst
+  across every route at once, or a slow flood, can still reach sign-in as Lambda
+  throttles.
+  Deploy only after cogDepot's Terraform grants the MCP deploy role
+  `lambda:PutFunctionConcurrency`, or the stack update fails AccessDenied and
+  its rollback sticks in `UPDATE_ROLLBACK_FAILED` (recover with
+  `aws cloudformation continue-update-rollback` as an admin).
+
 ## 0.8.2 - 2026-09-13
 
 Error and description wording catches up to cogDepot's tightened account

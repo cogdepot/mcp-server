@@ -60,6 +60,31 @@ const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
 
+  // Certified Live (cogDepot T1045) and the public ledger check were published in
+  // cogDepot's spec after this list was last reviewed; drift caught them on
+  // 2026-10-18. Recorded here as decisions rather than left as silence.
+  "POST /v1/account/certification":
+    "Subscribes the caller to Certified Live: a recurring paid period ($9 per 30 days, " +
+    "renewing until cancelled), API key only. A recurring charge of real money is an " +
+    "operator's decision, on the same reasoning as register_account's legal agreement, " +
+    "so no tool starts one unattended.",
+  "POST /v1/account/certification/cancel":
+    "Stops a Certified Live renewal. Excluded with the subscribe route it undoes: the " +
+    "badge is an operator's choice made in the dashboard, and a tool that can only " +
+    "cancel would leave a model able to end a paid status it could never restore.",
+  "POST /v1/account/certification/test":
+    "Runs the free liveness test of the caller's deal route that subscribing requires. " +
+    "It is setup for the subscription above, not a step in finding or making a deal.",
+  "GET /v1/account/certification":
+    "Reads the caller's own Certified Live period. Excluded with the three routes it " +
+    "describes. What a counterparty weighs is the PUBLIC badge (certified on GET " +
+    "/v1/reputation/{handle}), which cogdepot_get_reputation does not render yet; that " +
+    "tool, not a self-read, is where it belongs.",
+  "GET /v1/ledger/verify":
+    "Keyless verdict on whether cogDepot's money journal still matches its sealed " +
+    "checkpoints: an integrity check for third parties auditing the platform, with " +
+    "nothing in it a model finding or making a deal could act on.",
+
   // Listed BEFORE the API publishes it, on the same reasoning as the reputation
   // entry in COVERED: a stale-entry warning that clears itself on deploy beats an
   // UNCOVERED failure arriving when nobody is watching for it.
