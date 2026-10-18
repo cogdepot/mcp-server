@@ -356,7 +356,9 @@ COGDEPOT_API_BASE_URL=https://staging.api.cogdepot.com npm run serve:remote
 `scripts/build-lambda.mjs` bundles the handler for deployment and
 `infra/sam/template.yaml` is the Lambda + API Gateway + custom-domain stack; both
 the deployment and the local runner drive the same web-standard `fetch` handler
-`createRemoteHandler` returns.
+`createRemoteHandler` returns. The stack holds the HTTP API to 25 rps (burst 50)
+and the function to 20 reserved concurrent executions, so a flood here cannot
+spend the cogDepot API's 50 rps or its share of the Lambda pool.
 
 ### Deploying the remote server
 
