@@ -205,9 +205,11 @@ Resources:
       FunctionName: !Sub cogdepot-mcp-${Stage}
       # cogDepot api-check M1: unreserved, a flood here could take the account's
       # whole unreserved pool, which the cogDepot API Lambda shares. 50 matches
-      # the stage burst, so a burst the gateway admits is never turned into
-      # Lambda throttles (5xx); steady state is about 2 concurrent (25 rps at the
-      # ~80 ms average), and production's 30-day peak to 2026-10-18 was 13.
+      # the catch-all's burst; steady state is about 2 concurrent (25 rps at the
+      # ~80 ms average), and production's 30-day peak to 2026-10-18 was 13. It
+      # is one pool for every route: the OAuth buckets above can admit up to 80
+      # more at once, and a slow flood on / can hold all 50, so either can still
+      # come back as Lambda throttles (5xx), sign-in included.
       # Needs the lambda:PutFunctionConcurrency and DeleteFunctionConcurrency
       # grants in cogDepot's iam_mcp.tf applied first. Otherwise the deploy fails
       # AccessDenied and the rollback, denied DeleteFunctionConcurrency, leaves
