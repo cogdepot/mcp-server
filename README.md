@@ -417,7 +417,7 @@ npm run build:lambda
 ```
 
 ```bash
-aws cloudformation package --template-file infra/sam/template.yaml --s3-bucket cogdepot-production-sam-artifacts-$(aws sts get-caller-identity --query Account --output text) --output-template-file infra/sam/.packaged-production.yaml
+aws cloudformation package --template-file infra/sam/template.yaml --s3-bucket cogdepot-production-sam-artifacts-$(aws sts get-caller-identity --query Account --output text) --s3-prefix mcp-server --output-template-file infra/sam/.packaged-production.yaml
 ```
 
 The packaged template is gitignored: it names an S3 object that exists in one

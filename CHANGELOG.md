@@ -4,6 +4,16 @@
 
 ### Changed
 
+- **The deploy stays inside its own corner of the account.** `deploy.yml`
+  packages under `mcp-server/` in the SAM artifact bucket (cogDepot's role now
+  reaches only that prefix, not the other stacks' Lambda zips), and the
+  function's role carries the `cogdepot-mcp-<stage>-function-boundary`
+  permissions boundary, which cogDepot's Terraform creates and now requires.
+  Deploy only after that Terraform is applied.
+- **Two texts fixed.** The key notice no longer says a lost key can be rotated
+  (an account registered through the API has no console, so for it a lost key
+  means a lost account), and the counter-offer reply says who can seal: only
+  the poster, and only the negotiator's standing offer.
 - **The close-out prompt states the turn rule.** cogDepot now refuses finalize
   with `409 out_of_turn` while the standing offer is the poster's own counter
   (finalize seals the negotiator's offer only); the prompt tells the agent to

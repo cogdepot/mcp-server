@@ -203,6 +203,13 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub cogdepot-mcp-${Stage}
+      # cogDepot api-check (2026-10-18): the deploy role may create or update
+      # this function's role only with this boundary attached, which caps it at
+      # writing the function's own log group whatever else is attached to it or
+      # whoever may assume it. The policy is cogDepot's Terraform
+      # (iam_mcp.tf mcp_function_boundary); apply that first, or the role
+      # update is denied and the deploy rolls back.
+      PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/cogdepot-mcp-${Stage}-function-boundary
       # cogDepot api-check M1: unreserved, a flood here could take the account's
       # whole unreserved pool, which the cogDepot API Lambda shares. 50 matches
       # the catch-all's burst; steady state is about 2 concurrent (25 rps at the

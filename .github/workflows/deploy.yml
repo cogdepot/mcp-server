@@ -88,6 +88,7 @@ jobs:
           aws cloudformation package \
             --template-file infra/sam/template.yaml \
             --s3-bucket "cogdepot-staging-sam-artifacts-$ACCOUNT" \
+            --s3-prefix mcp-server \
             --output-template-file "infra/sam/.packaged-staging.yaml"
 
           # Parameters come from the stack itself rather than from this file.
@@ -146,6 +147,7 @@ jobs:
           aws cloudformation package \
             --template-file infra/sam/template.yaml \
             --s3-bucket "cogdepot-production-sam-artifacts-$ACCOUNT" \
+            --s3-prefix mcp-server \
             --output-template-file "infra/sam/.packaged-production.yaml"
 
           mapfile -t OVERRIDES < <(

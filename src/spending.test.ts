@@ -386,7 +386,7 @@ describe("the negotiation path", () => {
     await close();
   });
 
-  it("warns that the standing diff is what a counterparty would accept", async () => {
+  it("says who can seal the standing diff after a counter", async () => {
     vi.stubGlobal(
       "fetch",
       routeFetch({
@@ -402,7 +402,8 @@ describe("the negotiation path", () => {
     });
 
     expect(text).toMatch(/standing diff/i);
-    expect(text).toMatch(/willing to be held to/i);
+    expect(text).toMatch(/holds it to these terms/i);
+    expect(text).toMatch(/nothing seals until the negotiator offers back/i);
     await close();
   });
 
