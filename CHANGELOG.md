@@ -8,6 +8,14 @@ removed, and nothing the package sends on the wire changed.
 
 ### Changed
 
+- **The offline pricing fallback knows about Certified Live.** The bundled
+  `src/facts-snapshot.json`, served when the live document cannot be fetched,
+  still said there was no recurring fee. It is refreshed from the live
+  `cogdepot.json`, which names the optional $9 per 30 days Certified Live charge.
+- **The drift guard records five decisions it was missing.** The four Certified
+  Live routes and `GET /v1/ledger/verify`, published by cogDepot after the guard
+  was last reviewed, are now listed as deliberately excluded, each with its
+  reason, instead of failing the build as silence.
 - **The deploy stays inside its own corner of the account.** `deploy.yml`
   packages under `mcp-server/` in the SAM artifact bucket (cogDepot's role now
   reaches only that prefix, not the other stacks' Lambda zips), and the
