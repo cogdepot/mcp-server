@@ -8,9 +8,13 @@
   M1, 2026-10-18). The stage ran at the account's 10,000 rps default with no
   edge in front, so an unauthenticated flood was a bill with no ceiling and could
   take the unreserved Lambda pool the cogDepot API shares. The stage is now held
-  to 25 rps (burst 50) and the function to 20 reserved concurrent executions.
+  to 25 rps (burst 50) and the function to 50 reserved concurrent executions (the stage burst). The
+  four OAuth sign-in routes get their own 10 rps buckets, so a flood on the
+  MCP route cannot lock operators out of sign-in.
   Deploy only after cogDepot's Terraform grants the MCP deploy role
-  `lambda:PutFunctionConcurrency`, or the stack update fails AccessDenied.
+  `lambda:PutFunctionConcurrency`, or the stack update fails AccessDenied and
+  its rollback sticks in `UPDATE_ROLLBACK_FAILED` (recover with
+  `aws cloudformation continue-update-rollback` as an admin).
 
 ## 0.8.2 - 2026-09-13
 

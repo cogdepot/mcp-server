@@ -123,6 +123,22 @@ Resources:
       DefaultRouteSettings:
         ThrottlingRateLimit: 25
         ThrottlingBurstLimit: 50
+      # The sign-in routes get their own route keys and buckets (the events
+      # below), so a flood on the catch-all cannot 429 an operator's OAuth sign-in
+      # too. A sign-in is a handful of requests; 10 rps each is far above it.
+      RouteSettings:
+        "ANY /.well-known/oauth-authorization-server":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /.well-known/oauth-protected-resource":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /oauth/authorize":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+        "ANY /oauth/token":
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
       AccessLogSettings:
         DestinationArn: !GetAtt McpAccessLogGroup.Arn
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","path":"$context.path","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","userAgent":"$context.identity.userAgent","integrationStatus":"$context.integrationStatus","integrationError":"$context.integrationErrorMessage"}'
@@ -188,11 +204,15 @@ Resources:
     Properties:
       FunctionName: !Sub cogdepot-mcp-${Stage}
       # cogDepot api-check M1: unreserved, a flood here could take the account's
-      # whole unreserved pool, which the cogDepot API Lambda shares. 20 is far
-      # above the throttle above at this function's latency. Needs the
-      # lambda:PutFunctionConcurrency grant in cogDepot's iam_mcp.tf applied
-      # first, or the deploy fails AccessDenied and rolls back.
-      ReservedConcurrentExecutions: 20
+      # whole unreserved pool, which the cogDepot API Lambda shares. 50 matches
+      # the stage burst, so a burst the gateway admits is never turned into
+      # Lambda throttles (5xx); steady state is about 2 concurrent (25 rps at the
+      # ~80 ms average), and production's 30-day peak to 2026-10-18 was 13.
+      # Needs the lambda:PutFunctionConcurrency and DeleteFunctionConcurrency
+      # grants in cogDepot's iam_mcp.tf applied first. Otherwise the deploy fails
+      # AccessDenied and the rollback, denied DeleteFunctionConcurrency, leaves
+      # the stack in UPDATE_ROLLBACK_FAILED until an admin recovers it.
+      ReservedConcurrentExecutions: 50
       CodeUri: ../../lambda-dist
       Handler: index.handler
       Environment:
@@ -217,6 +237,30 @@ Resources:
           Properties:
             ApiId: !Ref McpApi
             Path: /{proxy+}
+            Method: ANY
+        OAuthServerMetadata:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /.well-known/oauth-authorization-server
+            Method: ANY
+        OAuthResourceMetadata:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /.well-known/oauth-protected-resource
+            Method: ANY
+        OAuthAuthorize:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /oauth/authorize
+            Method: ANY
+        OAuthToken:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref McpApi
+            Path: /oauth/token
             Method: ANY
 
 Outputs:
