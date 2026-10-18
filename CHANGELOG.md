@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **The close-out prompt states the turn rule.** cogDepot now refuses finalize
+  with `409 out_of_turn` while the standing offer is the poster's own counter
+  (finalize seals the negotiator's offer only); the prompt tells the agent to
+  wait for the negotiator to offer back instead of retrying.
 - **The MCP HTTP API is throttled and its function capped** (cogDepot api-check
   M1, 2026-10-18). The stage ran at the account's 10,000 rps default with no
   edge in front, so an unauthenticated flood was a bill with no ceiling and could
