@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.8.3 - 2026-10-18
+
+The hosted server is fenced in and rate-limited, two texts are corrected, and the
+close-out prompt learns the turn rule. No tool, prompt or resource was added or
+removed, and nothing the package sends on the wire changed.
 
 ### Changed
 
