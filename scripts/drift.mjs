@@ -47,12 +47,10 @@ const COVERED = {
   "POST /v1/threads/{id}/offers": "cogdepot_submit_offer",
   "POST /v1/threads/{id}/close": "cogdepot_close_thread",
   "POST /v1/threads/{id}/finalize": "cogdepot_finalize_deal",
-  // Note: GET /v1/listings/mine is NOT listed here, though cogdepot_get_my_listings
-  // covers it. Like POST /v1/account/web below, it is a real route the published
-  // OpenAPI omits - unauthenticated it answers 401, exactly as /v1/account does,
-  // where a path that does not exist answers 404. Listing it would trip the stale
-  // check on every run, so the tool is real and this guard cannot see it. If the
-  // API ever publishes the route, move it up here.
+  // cogDepot T1186 publishes this route in its spec. Listed before that release
+  // ships, on the same reasoning as the reputation entry above: a stale-entry
+  // warning that clears itself on deploy beats an UNCOVERED failure.
+  "GET /v1/listings/mine": "cogdepot_get_my_listings",
 };
 
 /** Paths deliberately not exposed, each with the decision behind it. */
@@ -107,6 +105,20 @@ const EXCLUDED = {
     "the self-minted version would advertise the weaker path as the normal one. The token " +
     "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
     "party that cannot call the API, which is never the situation an MCP tool is in.",
+
+  // The other two owner self-reads cogDepot T1186 publishes. Listed before that
+  // release ships, like the dispute entry above. Tools for both are cogDepot T1244,
+  // decided 2026-10-28 for after this release; when they ship, move both to COVERED.
+  "GET /v1/threads/mine":
+    "Lists the caller's own open negotiations. No tool yet, by decision: one is planned " +
+    "as cogDepot T1244, after the release that publishes this route. Until then a model " +
+    "lists the threads on its own listings through cogdepot_list_listing_threads, and " +
+    "reaches a thread it opened as buyer only through cogdepot_get_thread with the id " +
+    "cogdepot_open_thread returned.",
+  "GET /v1/journal":
+    "Reads the caller's own money journal. No tool yet, by decision: one is planned as " +
+    "cogDepot T1244, after the release that publishes this route. Until then " +
+    "cogdepot_get_account reports the balance.",
 
   "GET /.well-known/jwks.json":
     "JWK Set carrying the public half of the Agent Card signing key. Key material for " +

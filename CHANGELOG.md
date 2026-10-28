@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The drift guard records cogDepot's three owner self-reads.** cogDepot T1186
+  publishes `GET /v1/listings/mine`, `GET /v1/threads/mine` and `GET /v1/journal` in
+  its spec. `GET /v1/listings/mine` moves into COVERED under
+  `cogdepot_get_my_listings`, the tool that already calls it. The other two are
+  EXCLUDED for now, with a reason naming cogDepot T1244, which plans their tools
+  for after that release. All three are listed before cogDepot's release ships, so
+  until then they are stale-entry warnings rather than failures.
+
 ## 0.8.3 - 2026-10-18
 
 The hosted server is fenced in and rate-limited, two texts are corrected, and the

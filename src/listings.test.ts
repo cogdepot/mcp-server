@@ -485,9 +485,10 @@ describe("the account's own listings", () => {
     await close();
   });
 
-  it("accepts a bare array too, since the route is absent from the OpenAPI", async () => {
-    // The response shape cannot be read off a published contract, so the parser
-    // tolerates both wrappings rather than failing a free read over a key name.
+  it("accepts a bare array too, since the parser predates a published contract", async () => {
+    // The parser was written before any published contract described the response
+    // (cogDepot T1186 publishes one), so it tolerates both wrappings rather than
+    // failing a free read over a key name.
     vi.stubGlobal(
       "fetch",
       routeFetch({

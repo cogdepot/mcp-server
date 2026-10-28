@@ -22,10 +22,12 @@
  * endpoint exists to offer.
  *
  * `GET /v1/listings/mine`, behind the keyed tool, is a real route that the
- * published OpenAPI omits - the API's route list is hand-curated and several
- * registered routes are left out on purpose. Confirmed by probe rather than
- * assumed: unauthenticated it answers 401, exactly as `/v1/account` does, where
- * a path that genuinely does not exist answers 404.
+ * published OpenAPI has omitted - the API's route list is hand-curated and
+ * several registered routes are left out on purpose. cogDepot T1186 publishes
+ * it; until the release carrying that ships, the spec still leaves it out.
+ * Confirmed by probe rather than assumed: unauthenticated it answers 401,
+ * exactly as `/v1/account` does, where a path that genuinely does not exist
+ * answers 404.
  */
 
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -430,11 +432,13 @@ async function fetchPreview(
 /**
  * Narrows whatever `/v1/listings/mine` returns to an array of listings.
  *
- * Tolerant of both `{listings:[...]}` and a bare array because the route is
- * absent from the published OpenAPI, so its response shape is not something this
- * package can read off a contract. An unrecognised shape yields an empty list,
- * which the renderer reports as "none" rather than as an error - the alternative
- * is failing a free, read-only call over a wrapper key.
+ * Tolerant of both `{listings:[...]}` and a bare array because the parser was
+ * written while the route was absent from the published OpenAPI, so its response
+ * shape could not be read off a contract. cogDepot T1186 publishes the route with
+ * the `{listings:[...]}` wrapping (`FeedPage`); until that release ships, the
+ * published spec still does not describe it. An unrecognised shape yields an
+ * empty list, which the renderer reports as "none" rather than as an error - the
+ * alternative is failing a free, read-only call over a wrapper key.
  */
 function asListings(body: unknown): Record<string, unknown>[] {
   if (Array.isArray(body)) return body.filter(isRecord);
