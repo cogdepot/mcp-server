@@ -20,6 +20,7 @@ import { registerReputationTool } from "./tools-reputation.js";
 import { registerStatsTool } from "./tools-stats.js";
 import { registerDealTools, registerNegotiationTools } from "./tools-deals.js";
 import {
+  registerListingDetailTool,
   registerMeteredListingTools,
   registerMyListingsTool,
   registerPreviewTool,
@@ -109,6 +110,7 @@ export function buildServer(
     registerAccountTools(server, client);
     registerDealTools(server, client);
     registerMyListingsTool(server, client);
+    registerListingDetailTool(server, client);
 
     // The rest of the market: browsing, posting, negotiating and sealing. These
     // are separated into their own registrars not because they are gated but

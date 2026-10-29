@@ -477,6 +477,10 @@ describe("keyed tools", () => {
     expect(description).toContain("route_unanswered");
     expect(description).toContain("route_in_use");
     expect(routeSchema?.description).toContain("/_cogdepot/liveness");
+    // Each call re-sends the challenge against a per-account hourly limit and
+    // can re-mail an unconfirmed contact, so a host must not treat a repeat as
+    // free to retry blindly.
+    expect(tool?.annotations?.idempotentHint).toBe(false);
     await close();
   });
 

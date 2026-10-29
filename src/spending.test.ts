@@ -113,6 +113,10 @@ describe("what a model is told before it spends", () => {
     expect(tool?.description).toMatch(/Free - listing detail is not metered/);
     expect(tool?.description).toContain("Requires an API key");
     expect(tool?.description).not.toMatch(/COSTS|1 credit/);
+    // A free read that changes nothing on the account, like the other free
+    // keyed reads. Pinned so a later edit cannot drift it either way unseen.
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+    expect(tool?.annotations?.destructiveHint).toBe(false);
     await close();
   });
 

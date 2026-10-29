@@ -240,7 +240,11 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        // The stored profile ends the same either way, but a repeat is not free
+        // of effect: every call sends the route a fresh liveness challenge,
+        // counted against a per-account hourly limit, and can mail an
+        // unconfirmed contact address again. Same reasoning as verify_domain.
+        idempotentHint: false,
         openWorldHint: true,
       },
     },

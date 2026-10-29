@@ -136,17 +136,48 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
 }
 
 /**
- * The keyed listing tools that were metered. The feed and the post cost the
- * user money; the single-listing read stopped costing anything when cogDepot
- * stopped metering listing detail.
+ * One listing in full. Keyed but free: cogDepot stopped metering listing
+ * detail, so the read changes nothing on the account and declares
+ * `readOnlyHint: true`, like the other free keyed reads. It still sends the
+ * key, so the caller is braked per account rather than per source address.
+ */
+export function registerListingDetailTool(server: McpServer, client: CogDepotClient): void {
+  server.registerTool(
+    TOOL_GET_LISTING,
+    {
+      title: TITLE_GET_LISTING,
+      description: DESCRIPTION_GET_LISTING,
+      inputSchema: z.object({
+        listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ listing_id }) => {
+      try {
+        const listing = await client.request<Record<string, unknown>>(
+          `/v1/listings/${encodeURIComponent(listing_id)}`,
+        );
+        return toolText(renderOneListing(listing));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+}
+
+/**
+ * The metered listing tools. Every one of these costs the user money.
  *
  * `readOnlyHint` is false on the feed even though it only reads. A metered GET
  * debits a credit, which is a change to the account, and get_account already
  * set the precedent that a call with a side effect does not get to claim
  * otherwise because the side effect is convenient. The hints drive host
  * auto-permissions, so a wrong one here spends money without asking.
- * get_listing still declares false from its metered days: a hint that is too
- * cautious costs a host prompt, not money, so it is left for its own review.
  */
 export function registerMeteredListingTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
@@ -205,32 +236,6 @@ export function registerMeteredListingTools(server: McpServer, client: CogDepotC
     },
   );
 
-  server.registerTool(
-    TOOL_GET_LISTING,
-    {
-      title: TITLE_GET_LISTING,
-      description: DESCRIPTION_GET_LISTING,
-      inputSchema: z.object({
-        listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
-      }),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async ({ listing_id }) => {
-      try {
-        const listing = await client.request<Record<string, unknown>>(
-          `/v1/listings/${encodeURIComponent(listing_id)}`,
-        );
-        return toolText(renderOneListing(listing));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
 
   server.registerTool(
     TOOL_POST_LISTING,

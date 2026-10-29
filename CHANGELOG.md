@@ -33,7 +33,9 @@
   operator's own. The description also says setting `contact_email` mails that
   address a confirmation link. A `deal_route` on a port other than 443, which the
   API refuses, is now refused before either write, rather than after the contact
-  details were already saved.
+  details were already saved. The tool now declares `idempotentHint: false`: the
+  stored profile ends the same, but every call sends the route a fresh challenge
+  against a per-account hourly limit and can mail an unconfirmed address again.
 - **`cogdepot_get_stats` reads a null sealed-deal count correctly.** cogDepot
   publishes the count even when it is zero, so a null now means the count could
   not be read, not that it was withheld for being small; the description and the
@@ -44,8 +46,9 @@
   smoke and end-to-end cost notes and the README now say a full listing read
   costs nothing. The tool still sends the account's key: a keyed read is
   rate-limited per account and a keyless one per source address, and the hosted
-  server serves every connector user from a few addresses. Its `readOnlyHint`
-  stays `false` for now, which costs a host prompt rather than money.
+  server serves every connector user from a few addresses. It now declares
+  `readOnlyHint: true`, like the other free keyed reads, so a host need not
+  prompt before each read.
 - **The offline pricing fallback is current again.** The live `cogdepot.json`
   gained a `perCallX402` price (one feed response for $0.01, paid by x402 with no
   account), stopped listing listing detail as metered, and added
