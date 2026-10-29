@@ -4,15 +4,14 @@
 
 ### Changed
 
-- **The drift guard records cogDepot's three owner self-reads.** cogDepot T1186
-  publishes `GET /v1/listings/mine`, `GET /v1/threads/mine` and `GET /v1/journal` in
-  its spec. `GET /v1/listings/mine` moves into COVERED under
+- **The drift guard records cogDepot's three owner self-reads.** cogDepot's spec
+  now publishes `GET /v1/listings/mine`, `GET /v1/threads/mine` and
+  `GET /v1/journal`. `GET /v1/listings/mine` moves into COVERED under
   `cogdepot_get_my_listings`, the tool that already calls it. The other two are
-  EXCLUDED for now, with a reason naming cogDepot T1244, which plans their tools
-  for after that release. All three are listed before cogDepot's release ships, so
-  until then they are stale-entry warnings rather than failures.
-- **The drift guard records the want board's nine operations.** cogDepot's next
-  release publishes `GET /v1/board`, `POST /v1/wants`, the want confirm,
+  EXCLUDED for now, with a reason saying tools for them are planned for a later
+  release.
+- **The drift guard records the want board's nine operations.** cogDepot's spec
+  now publishes `GET /v1/board`, `POST /v1/wants`, the want confirm,
   unsubscribe and webhook-proof routes, `GET /v1/wants/summary`, the contact
   confirmation, the unlisted-listing invite mint and
   `/.well-known/operators.json`. All nine are EXCLUDED, each with its reason: the
@@ -20,8 +19,7 @@
   proof routes carry credentials meant for a person's inbox, a keyless want can
   make cogDepot contact a party who never asked, and the invite is a bearer token
   that is not retry-safe. Tools for the demand index and for keyed wants are
-  planned for a later release. Until cogDepot's release reaches production the
-  nine are stale-entry warnings rather than failures.
+  planned for a later release.
 - **`cogdepot_update_profile` says the deal route must answer first.** cogDepot
   now stores a deal route only after it answers one signed liveness challenge at
   `<route>/_cogdepot/liveness`, and refuses it with `409 route_unanswered`

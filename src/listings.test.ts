@@ -487,7 +487,7 @@ describe("the account's own listings", () => {
 
   it("accepts a bare array too, since the parser predates a published contract", async () => {
     // The parser was written before any published contract described the response
-    // (cogDepot T1186 publishes one), so it tolerates both wrappings rather than
+    // (the spec describes one now), so it tolerates both wrappings rather than
     // failing a free read over a key name.
     vi.stubGlobal(
       "fetch",

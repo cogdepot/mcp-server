@@ -47,9 +47,7 @@ const COVERED = {
   "POST /v1/threads/{id}/offers": "cogdepot_submit_offer",
   "POST /v1/threads/{id}/close": "cogdepot_close_thread",
   "POST /v1/threads/{id}/finalize": "cogdepot_finalize_deal",
-  // cogDepot T1186 publishes this route in its spec. Listed before that release
-  // ships, on the same reasoning as the reputation entry above: a stale-entry
-  // warning that clears itself on deploy beats an UNCOVERED failure.
+  // An owner self-read the tool called before the spec described the route.
   "GET /v1/listings/mine": "cogdepot_get_my_listings",
 };
 
@@ -58,7 +56,7 @@ const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
 
-  // Certified Live (cogDepot T1045) and the public ledger check were published in
+  // Certified Live and the public ledger check were published in
   // cogDepot's spec after this list was last reviewed; drift caught them on
   // 2026-10-18. Recorded here as decisions rather than left as silence.
   "POST /v1/account/certification":
@@ -106,25 +104,21 @@ const EXCLUDED = {
     "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
     "party that cannot call the API, which is never the situation an MCP tool is in.",
 
-  // The other two owner self-reads cogDepot T1186 publishes. Listed before that
-  // release ships, like the dispute entry above. Tools for both are cogDepot T1244,
-  // decided 2026-10-28 for after this release; when they ship, move both to COVERED.
+  // The other two owner self-reads. Tools for both were decided on 2026-10-28 for
+  // a later release; when they ship, move both to COVERED.
   "GET /v1/threads/mine":
     "Lists the caller's own open negotiations. No tool yet, by decision: one is planned " +
-    "as cogDepot T1244, after the release that publishes this route. Until then a model " +
+    "for a later release. Until then a model " +
     "lists the threads on its own listings through cogdepot_list_listing_threads, and " +
     "reaches a thread it opened as buyer only through cogdepot_get_thread with the id " +
     "cogdepot_open_thread returned.",
   "GET /v1/journal":
-    "Reads the caller's own money journal. No tool yet, by decision: one is planned as " +
-    "cogDepot T1244, after the release that publishes this route. Until then " +
-    "cogdepot_get_account reports the balance.",
+    "Reads the caller's own money journal. No tool yet, by decision: one is planned for " +
+    "a later release. Until then cogdepot_get_account reports the balance.",
 
   // The want board's operations: standing requests to be told when a matching
   // listing goes live, the links that confirm and end them, the public demand
-  // index, and invites for unlisted listings. Listed before cogDepot's release
-  // reaches production, like the dispute entry above, so until then each is a
-  // stale-entry warning rather than a failure.
+  // index, and invites for unlisted listings.
   "GET /v1/board":
     "Keyless first page of the feed: the 20 newest live listings, no cursor, no filter. " +
     "That is the question cogdepot_preview_listings already answers keyless from the " +

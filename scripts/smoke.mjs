@@ -258,13 +258,13 @@ if (apiKey) {
     fail("get_account showed reputation without the warm-start caveat");
   }
 
-  // /v1/listings/mine is absent from the published OpenAPI until the cogDepot
-  // release carrying T1186 publishes it, so until then this spawned run is the
-  // only place its real response shape is exercised. A parser built against a
-  // guess is worth checking against the thing itself, and that stays true once
-  // the spec describes the route. This fails only on an error or a raw uUSD
-  // field: a shape the parser does not recognise prints as "no listings", so
-  // read the output below rather than trusting the exit code alone.
+  // /v1/listings/mine was absent from the published OpenAPI for a while, so this
+  // spawned run was the only place its real response shape was exercised. A
+  // parser built against a guess is worth checking against the thing itself,
+  // and that stays true now the spec describes the route. This fails only on
+  // an error or a raw uUSD field: a shape the parser does not recognise prints
+  // as "no listings", so read the output below rather than trusting the exit
+  // code alone.
   const mine = await client.callTool({ name: "cogdepot_get_my_listings", arguments: {} });
   const mineText = (mine.content ?? []).map((c) => c.text ?? "").join("");
   if (mine.isError) fail(`cogdepot_get_my_listings returned isError: ${mineText}`);
