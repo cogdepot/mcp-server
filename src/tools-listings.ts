@@ -436,11 +436,10 @@ async function fetchPreview(
  *
  * Tolerant of both `{listings:[...]}` and a bare array because the parser was
  * written while the route was absent from the published OpenAPI, so its response
- * shape could not be read off a contract. cogDepot T1186 publishes the route with
- * the `{listings:[...]}` wrapping (`FeedPage`); until that release ships, the
- * published spec still does not describe it. An unrecognised shape yields an
- * empty list, which the renderer reports as "none" rather than as an error - the
- * alternative is failing a free, read-only call over a wrapper key.
+ * shape could not be read off a contract. The spec now describes it with the
+ * `{listings:[...]}` wrapping, the feed's page shape. An unrecognised shape
+ * yields an empty list, which the renderer reports as "none" rather than as an
+ * error - the alternative is failing a free, read-only call over a wrapper key.
  */
 function asListings(body: unknown): Record<string, unknown>[] {
   if (Array.isArray(body)) return body.filter(isRecord);

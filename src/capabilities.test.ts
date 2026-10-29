@@ -258,8 +258,9 @@ describe("resources", () => {
     async (uri) => {
       // The whole admission criterion for this set, asserted on the call log
       // rather than on the output. A host may fetch a resource whenever it
-      // likes; if one of these reached /v1/feed or /v1/listings/{id}, a context
-      // refresh would spend the user's credits.
+      // likes; if one of these reached /v1/feed, a context refresh would spend
+      // the user's credits, and if one reached /v1/listings/{id}, it would pull
+      // text written by strangers into context without a model deciding to.
       const { impl, seen } = routeFetch(BASE_ROUTES);
       vi.stubGlobal("fetch", impl);
 
@@ -285,8 +286,9 @@ describe("resources", () => {
     const { resourceTemplates } = await client.listResourceTemplates();
 
     // cogdepot://listing/{id} is the obvious next resource and is deliberately
-    // absent: reading a listing costs a credit, and a host refreshing context
-    // would be spending money the user did not authorise per call.
+    // absent. Reading a listing is free now, but a host refreshing context would
+    // pull text written by strangers into it without a model deciding to - the
+    // reason resources.ts gives.
     expect(resourceTemplates ?? []).toEqual([]);
     await close();
   });
@@ -301,6 +303,21 @@ describe("resources", () => {
     expect(text).toContain("1 credit ($0.0005)");
     expect(text).toMatch(/what is free/i);
     expect(text).toMatch(/what is not/i);
+    await close();
+  });
+
+  it("prices a full listing read as free, not as metered", async () => {
+    // cogDepot stopped metering listing detail. A pricing resource that still
+    // listed the read under "What is not" would tell a host it is charged.
+    vi.stubGlobal("fetch", routeFetch(BASE_ROUTES).impl);
+
+    const { client, close } = await connect();
+    const result = await client.readResource({ uri: RESOURCE_PRICING_URI });
+    const text = String(result.contents[0]?.text ?? "");
+    const [, free = "", charged = ""] = text.split(/## What is free|## What is not/);
+
+    expect(free).toMatch(/listing in full/i);
+    expect(charged).not.toMatch(/listing in full/i);
     await close();
   });
 
@@ -423,8 +440,9 @@ describe("workflow bodies, and the pricing gap", () => {
       await client.getPrompt({ name: PROMPT_PLAN_MY_SPEND, arguments: {} }),
     );
 
-    // It has to name the metered tools to explain their cost, while forbidding
-    // calling them - the one prompt whose whole job is to spend nothing.
+    // It has to name the keyed listing tools to explain what each costs (the
+    // feed is metered, a full listing read is free), while forbidding any call
+    // that costs credits - the one prompt whose whole job is to spend nothing.
     expect(text).toContain(TOOL_BROWSE_FEED);
     expect(text).toContain(TOOL_GET_LISTING);
     expect(text).toMatch(/do not call any tool that costs credits/i);
@@ -466,6 +484,25 @@ describe("workflow bodies, and the pricing gap", () => {
     // A negotiator that does not know this waits forever for the other side to
     // accept an offer only the poster can accept.
     expect(text).toMatch(/only the listing's poster can seal/i);
+    await close();
+  });
+
+  it("tells the buying workflow that a full listing read is free", async () => {
+    // Listing detail is not metered. A step still rationing get_listing as a
+    // credit would make a model skip the read that decides the shortlist.
+    vi.stubGlobal("fetch", routeFetch(BASE_ROUTES).impl);
+
+    const { client, close } = await connect(KEY);
+    const text = promptText(
+      await client.getPrompt({
+        name: PROMPT_FIND_A_COUNTERPARTY,
+        arguments: { need: "a translator" },
+      }),
+    );
+    const readStep = text.split("\n").find((line) => line.includes(TOOL_GET_LISTING)) ?? "";
+
+    expect(readStep).toMatch(/free/i);
+    expect(readStep).not.toMatch(/credit/i);
     await close();
   });
 

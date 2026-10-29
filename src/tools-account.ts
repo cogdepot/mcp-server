@@ -106,6 +106,23 @@ export function isValidAgentCardUrl(value: string): boolean {
   return !isUnreachableCardHost(url.hostname);
 }
 
+/**
+ * Whether a URL uses port 443, the only port the API accepts for a deal route.
+ *
+ * URL drops a spelled-out default port, so `https://acme.example:443/d` reads
+ * back with an empty port and passes, while `:8443` does not. Checked here
+ * because the contact write runs first: a route the API refuses after it leaves
+ * half the profile saved and a confirmation link mailed, for an input the
+ * schema could have turned away.
+ */
+export function usesHttpsDefaultPort(value: string): boolean {
+  try {
+    return new URL(value).port === "";
+  } catch {
+    return false;
+  }
+}
+
 interface AccountResponse {
   readonly account_id?: string;
   readonly balance_micro?: number;
@@ -171,6 +188,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
           .string()
           .url()
           .startsWith("https://", "must be an https URL")
+          .refine(usesHttpsDefaultPort, { message: "must use port 443: leave the port out" })
           .describe(
             "Your https route base for per-deal contact, released only after a deal seals. Port " +
               "443 only. It must already answer cogDepot's signed liveness challenge at " +

@@ -31,7 +31,9 @@
   what came back), points at the liveness-v1 contract and warns against retrying
   in a loop; `route_in_use` is not retryable and asks for a route of the
   operator's own. The description also says setting `contact_email` mails that
-  address a confirmation link.
+  address a confirmation link. A `deal_route` on a port other than 443, which the
+  API refuses, is now refused before either write, rather than after the contact
+  details were already saved.
 - **`cogdepot_get_stats` reads a null sealed-deal count correctly.** cogDepot
   publishes the count even when it is zero, so a null now means the count could
   not be read, not that it was withheld for being small; the description and the
