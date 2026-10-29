@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.8.4 - 2026-10-30
+
+Three tool texts catch up with cogDepot's production API, the drift guard records
+the twelve operations cogDepot published since 0.8.3, and two annotations are
+corrected. No tool, prompt or resource was added or removed. Nothing new is sent
+on the wire: a `deal_route` on a port other than 443 is now refused before any
+request rather than after the contact write.
 
 ### Changed
 

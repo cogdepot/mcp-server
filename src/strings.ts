@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.8.3";
+export const SERVER_VERSION = "0.8.4";
 
 /**
  * The User-Agent every outbound request from this package carries.
