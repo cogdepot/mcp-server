@@ -5,18 +5,19 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { buildServer } from "./core.js";
 import { renderStats } from "./tools-stats.js";
 import { resetFactsCacheForTesting } from "./facts.js";
-import { TOOL_GET_STATS } from "./strings.js";
+import { DESCRIPTION_GET_STATS, TOOL_GET_STATS } from "./strings.js";
 
 /**
  * The keyless marketplace aggregate.
  *
  * Most of what is asserted here is honesty rather than plumbing, on the same
- * reasoning as the reputation tool. cogDepot sends `null` for the sealed-deal
- * count and the median until enough deals exist to publish them, so a quiet
- * market and an unpublished measurement are the same bytes on the wire. A
- * renderer that printed `null` as 0 - or dropped the line - would let a model
- * report "no deals have sealed on cogDepot" as fact from a payload that says no
- * such thing. That is the defect these tests exist to prevent.
+ * reasoning as the reputation tool. cogDepot sends `null` for the median until
+ * enough deals exist to publish it, and for the sealed-deal count when it could
+ * not read the count. A renderer that printed either `null` as 0 - or dropped
+ * the line - would let a model report "no deals have sealed on cogDepot" as fact
+ * from a payload that says no such thing. That is the defect these tests exist
+ * to prevent. A published zero, on the other hand, is a real count and is
+ * rendered as one.
  *
  * The second one is staleness. The figures are recomputed on a schedule; the
  * live document was two days old while its own cache header claimed an hour.
@@ -29,6 +30,19 @@ const LIVE_PAYLOAD = {
   median_seal_seconds: null,
   registered_agents: 24,
   sealed_deals: null,
+  sealed_deals_window_days: 30,
+};
+
+/**
+ * The live payload, verbatim, on 2026-10-29. The sealed-deal count is published
+ * now, zero included; only the median is still withheld.
+ */
+const PUBLISHED_ZERO_PAYLOAD = {
+  generated_at: "2026-10-25T11:18:49Z",
+  median_seal_min_deals: 10,
+  median_seal_seconds: null,
+  registered_agents: 55,
+  sealed_deals: 0,
   sealed_deals_window_days: 30,
 };
 
@@ -78,6 +92,27 @@ describe("a withheld figure is never rendered as zero", () => {
     expect(rendered).toContain("NOT STATED");
     expect(rendered).toMatch(/Deals sealed in the last 30 days: NOT STATED/);
     expect(rendered).toContain("Not stated is not zero");
+  });
+
+  it("says a null sealed-deal count means the count could not be read, not that it was withheld", () => {
+    // cogDepot publishes the count even when it is zero, so a null no longer
+    // means "too small to publish". Saying it does would send a model to the
+    // wrong conclusion about a quiet market.
+    const rendered = renderStats(LIVE_PAYLOAD, NOW);
+
+    expect(rendered).toContain("an absent count means it could not be read");
+    expect(rendered).toContain("could not be read this time");
+    expect(rendered).not.toMatch(/withholds this figure|suppresses while they are small/);
+  });
+
+  it("renders a published zero as a real zero, with the median still not stated", () => {
+    const rendered = renderStats(PUBLISHED_ZERO_PAYLOAD, NOW);
+
+    expect(rendered).toContain("Deals sealed in the last 30 days: 0");
+    expect(rendered).not.toMatch(/Deals sealed in the last 30 days: NOT STATED/);
+    expect(rendered).not.toContain("could not be read");
+    expect(rendered).toMatch(/Median time to seal a deal: NOT STATED/);
+    expect(rendered).toContain("A NOT STATED median is an absent measurement, not a zero.");
   });
 
   it("never prints a zero anywhere for a payload whose figures are all null", () => {
@@ -185,6 +220,21 @@ describe("the aggregate does not overstate what it measures", () => {
 
     expect(rendered).toContain("Registered agents: 24");
     expect(rendered).toContain("not accounts that have traded");
+  });
+
+  it("says the agent count covers external accounts only, in the output and the description", () => {
+    // cogDepot leaves its own accounts out of registered_agents. A model that
+    // does not know that would discount the number for house accounts twice.
+    const rendered = renderStats(LIVE_PAYLOAD, NOW);
+
+    expect(rendered).toContain("external accounts only");
+    expect(DESCRIPTION_GET_STATS).toContain("external agents");
+    expect(DESCRIPTION_GET_STATS).toContain("own accounts are not counted");
+  });
+
+  it("describes a null sealed-deal count as unreadable, never as evidence about the market", () => {
+    expect(DESCRIPTION_GET_STATS).toContain("a null means the count could not be read");
+    expect(DESCRIPTION_GET_STATS).not.toContain("empty market");
   });
 
   it("surfaces a field the API adds later without inventing a meaning for it", () => {

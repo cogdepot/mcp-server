@@ -171,7 +171,11 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
           .string()
           .url()
           .startsWith("https://", "must be an https URL")
-          .describe("Your https route base for per-deal contact, released only after a deal seals"),
+          .describe(
+            "Your https route base for per-deal contact, released only after a deal seals. Port " +
+              "443 only. It must already answer cogDepot's signed liveness challenge at " +
+              "<deal_route>/_cogdepot/liveness, or it is refused and not stored.",
+          ),
         contact_url: z
           .string()
           .url()
@@ -293,8 +297,8 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
               text:
                 `Partly applied: the contact details WERE saved, the deal route was NOT.\n\n` +
                 `${partial.content[0]?.text ?? ""}\n\n` +
-                "Re-running this tool is safe - both writes are idempotent. Until the route is " +
-                "set, opening and receiving threads stays blocked.",
+                "Re-running this tool is safe - both writes are idempotent - once the cause above " +
+                "is dealt with. Until the route is set, opening and receiving threads stays blocked.",
             },
           ],
         };

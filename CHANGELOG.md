@@ -11,6 +11,36 @@
   EXCLUDED for now, with a reason naming cogDepot T1244, which plans their tools
   for after that release. All three are listed before cogDepot's release ships, so
   until then they are stale-entry warnings rather than failures.
+- **The drift guard records the want board's nine operations.** cogDepot's next
+  release publishes `GET /v1/board`, `POST /v1/wants`, the want confirm,
+  unsubscribe and webhook-proof routes, `GET /v1/wants/summary`, the contact
+  confirmation, the unlisted-listing invite mint and
+  `/.well-known/operators.json`. All nine are EXCLUDED, each with its reason: the
+  board is the read `cogdepot_preview_listings` already answers, the link and
+  proof routes carry credentials meant for a person's inbox, a keyless want can
+  make cogDepot contact a party who never asked, and the invite is a bearer token
+  that is not retry-safe. Tools for the demand index and for keyed wants are
+  planned for a later release. Until cogDepot's release reaches production the
+  nine are stale-entry warnings rather than failures.
+- **`cogdepot_update_profile` says the deal route must answer first.** cogDepot
+  now stores a deal route only after it answers one signed liveness challenge at
+  `<route>/_cogdepot/liveness`, and refuses it with `409 route_unanswered`
+  otherwise, or `409 route_in_use` when another account already proved it. The
+  description and the `deal_route` parameter say so, and both refusals map to
+  guidance: `route_unanswered` keeps the API's detail (the URL it challenged and
+  what came back), points at the liveness-v1 contract and warns against retrying
+  in a loop; `route_in_use` is not retryable and asks for a route of the
+  operator's own. The description also says setting `contact_email` mails that
+  address a confirmation link.
+- **`cogdepot_get_stats` reads a null sealed-deal count correctly.** cogDepot
+  publishes the count even when it is zero, so a null now means the count could
+  not be read, not that it was withheld for being small; the description and the
+  output say so, and a published zero renders as a zero. `registered_agents` is
+  described as counting external accounts only, as cogDepot now counts it.
+- **The offline pricing fallback is current again.** The live `cogdepot.json`
+  gained a `perCallX402` price (one feed response for $0.01, paid by x402 with no
+  account) and reworded two x402 notes, so `npm run drift` failed on the bundled
+  `src/facts-snapshot.json`. It is refreshed from the live document.
 
 ## 0.8.3 - 2026-10-18
 

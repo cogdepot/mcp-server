@@ -159,6 +159,66 @@ describe("describeProblem", () => {
     expect(error.message).toContain("1. set_contact: PUT /v1/account/contact");
   });
 
+  it("keeps the challenged URL from a route_unanswered and adds the step that fixes it", () => {
+    // Shaped like the detail cogDepot's route setter writes. The URL it
+    // challenged and what came back are the two facts a model needs to tell
+    // "no responder yet" from "down for a moment", and only the API knows them.
+    const error = describeProblem(
+      409,
+      asProblem({
+        reason: "route_unanswered",
+        detail:
+          "cogDepot sent one signed liveness challenge to https://ops.acme.dev/deal/_cogdepot/liveness " +
+          "and it was not answered (status 404). Nothing was stored. Fix the responder and retry the " +
+          "same call; it is safe to retry.",
+      }),
+    );
+
+    expect(error.reason).toBe("route_unanswered");
+    expect(error.message).toContain("https://ops.acme.dev/deal/_cogdepot/liveness");
+    expect(error.message).toContain("status 404");
+    expect(error.message).toContain("NOT stored");
+    expect(error.message).toContain("https://cogdepot.com/bindings/liveness-v1");
+    expect(error.message).toMatch(/not in a loop/);
+    // The API calls it safe to retry: a route that was briefly down passes.
+    expect(error.retryable).toBe(true);
+  });
+
+  it("explains a route_unanswered that arrives with no detail", () => {
+    const error = describeProblem(409, asProblem({ reason: "route_unanswered" }));
+
+    expect(error.message).toContain("/_cogdepot/liveness");
+    expect(error.message).toContain("nonce");
+    expect(error.message).toContain("NOT stored");
+  });
+
+  it("treats route_in_use as NOT retryable and points at a route of the operator's own", () => {
+    // A proved route belongs to one account. Retrying the same route can never
+    // pass, and the API will not name the holder.
+    const error = describeProblem(
+      409,
+      asProblem({
+        reason: "route_in_use",
+        detail:
+          "Another account already holds this route as proved, and a proved route belongs to one " +
+          "account. Nothing was stored. Use a route of your own; retrying the same route will not help.",
+      }),
+    );
+
+    expect(error.retryable).toBe(false);
+    expect(error.message).toContain("Another account already holds this route");
+    expect(error.message).toContain("cogdepot_update_profile");
+    expect(error.message).toMatch(/tell the operator/i);
+    expect(toolError(error).content[0]?.text).toContain("Do not retry this call unchanged.");
+  });
+
+  it("explains a route_in_use that arrives with no detail", () => {
+    const error = describeProblem(409, asProblem({ reason: "route_in_use" }));
+
+    expect(error.message).toContain("already holds this deal route");
+    expect(error.message).toContain("will not help");
+  });
+
   it("quotes the exact retry delay the API gives, rather than guessing", () => {
     // Also captured from staging. The API states 3600; reconstructing "wait for
     // the hour to roll over" throws away a number it handed us.

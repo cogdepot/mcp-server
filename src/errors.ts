@@ -138,6 +138,48 @@ export function describeProblem(
       );
     }
 
+    case "route_unanswered": {
+      // A deal route is stored only once it answers one signed liveness
+      // challenge. The API's detail names the exact URL it challenged and what
+      // came back, which a rebuilt sentence cannot know, so it is kept and the
+      // next step added. Retryable, as the API says - a route that was down for
+      // a moment passes on the next call - but a route with no responder fails
+      // the same way every time, and each attempt is one of a few route checks
+      // the account gets an hour. A model that loops here only burns them.
+      const detail =
+        text(problem.detail) ??
+        "cogDepot sent the deal route one signed liveness challenge (POST <deal_route>/_cogdepot/liveness) " +
+          "and it was not answered with HTTP 200 and the request's nonce echoed. Nothing was stored.";
+      return new ApiError(
+        status,
+        reason,
+        `${detail}\nThe deal route was NOT stored. If no responder runs at that path yet, the operator ` +
+          "has to deploy one first (the contract is https://cogdepot.com/bindings/liveness-v1); until " +
+          "then every retry fails the same way. A route that was only briefly down passes on a plain " +
+          "retry. Route checks are limited per account each hour, so retry once the route answers, " +
+          "not in a loop.",
+        true,
+      );
+    }
+
+    case "route_in_use":
+      // A proved route belongs to one account, and the API deliberately does
+      // not say which one holds it. Retrying cannot change that, so the only
+      // moves left are a route of this operator's own or a word with the
+      // operator, who may hold it from another of their accounts.
+      return new ApiError(
+        status,
+        reason,
+        (text(problem.detail) ??
+          "Another cogDepot account already holds this deal route as proved, and a proved route " +
+            "belongs to one account. Nothing was stored.") +
+          "\nThe deal route was NOT stored, and retrying the same route will not help. Set a route " +
+          "this operator runs and no other account uses, with cogdepot_update_profile. If this route " +
+          "really is the operator's, another of their accounts holds it: tell the operator rather " +
+          "than retrying.",
+        false,
+      );
+
     case "rate_limited": {
       // The API states the wait exactly. Reconstructing "wait for the hour to
       // roll over" from the reason code throws that away and leaves a model
