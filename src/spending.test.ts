@@ -85,7 +85,6 @@ afterEach(() => {
 describe("what a model is told before it spends", () => {
   it.each([
     [TOOL_BROWSE_FEED, /1 credit/i],
-    [TOOL_GET_LISTING, /1 credit/i],
     [TOOL_POST_LISTING, /201 credits/i],
     [TOOL_OPEN_THREAD, /2,000-credit|2,000 credit/i],
     [TOOL_FINALIZE_DEAL, /2,000 credits/i],
@@ -100,7 +99,24 @@ describe("what a model is told before it spends", () => {
     await close();
   });
 
-  it.each([TOOL_BROWSE_FEED, TOOL_GET_LISTING, TOOL_POST_LISTING, TOOL_OPEN_THREAD, TOOL_FINALIZE_DEAL])(
+  it("says the single-listing read is free, and still asks for a key", async () => {
+    // cogDepot stopped metering listing detail. A description still quoting a
+    // credit would make a model ration a read that costs nothing; one dropping
+    // the key would hide that the tool still sends it.
+    vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }).impl);
+
+    const { client, close } = await connect();
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === TOOL_GET_LISTING);
+
+    expect(tool?.title).toContain("(free)");
+    expect(tool?.description).toMatch(/Free - listing detail is not metered/);
+    expect(tool?.description).toContain("Requires an API key");
+    expect(tool?.description).not.toMatch(/COSTS|1 credit/);
+    await close();
+  });
+
+  it.each([TOOL_BROWSE_FEED, TOOL_POST_LISTING, TOOL_OPEN_THREAD, TOOL_FINALIZE_DEAL])(
     "%s does not claim to be read-only while charging for the call",
     async (name) => {
       // A metered GET still debits a credit. readOnlyHint drives host

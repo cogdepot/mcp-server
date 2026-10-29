@@ -4,9 +4,11 @@
  * - `cogdepot_preview_listings` is keyless, anonymous and free, and returns an
  *   unfiltered sample of 20.
  * - `cogdepot_get_my_listings` is keyed and free, and shows only the caller's own.
- * - `cogdepot_browse_feed`, `cogdepot_get_listing` and `cogdepot_post_listing`
- *   are keyed and metered. They are the ones that can search, and the ones that
- *   cost money.
+ * - `cogdepot_browse_feed` and `cogdepot_post_listing` are keyed and metered.
+ *   They are the ones that can search, and the ones that cost money.
+ * - `cogdepot_get_listing` is keyed and free: cogDepot stopped metering listing
+ *   detail. It still sends the key, so a caller is braked per account rather
+ *   than per source address, which the hosted server shares across its users.
  *
  * Two things make the preview unlike every other call in this package.
  *
@@ -21,13 +23,9 @@
  * without cogDepot learning which account is looking, which is the property the
  * endpoint exists to offer.
  *
- * `GET /v1/listings/mine`, behind the keyed tool, is a real route that the
- * published OpenAPI has omitted - the API's route list is hand-curated and
- * several registered routes are left out on purpose. cogDepot T1186 publishes
- * it; until the release carrying that ships, the spec still leaves it out.
- * Confirmed by probe rather than assumed: unauthenticated it answers 401,
- * exactly as `/v1/account` does, where a path that genuinely does not exist
- * answers 404.
+ * `GET /v1/listings/mine`, behind the keyed tool, was a real route the
+ * published OpenAPI left out for a while - the API's route list is hand-curated.
+ * It is in the spec now, and scripts/drift.mjs covers it like any other route.
  */
 
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -138,13 +136,17 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
 }
 
 /**
- * The metered listing tools. Every one of these costs the user money.
+ * The keyed listing tools that were metered. The feed and the post cost the
+ * user money; the single-listing read stopped costing anything when cogDepot
+ * stopped metering listing detail.
  *
- * `readOnlyHint` is false even on the two that only read. A metered GET debits a
- * credit, which is a change to the account, and get_account already set the
- * precedent that a call with a side effect does not get to claim otherwise
- * because the side effect is convenient. The hints drive host auto-permissions,
- * so a wrong one here spends money without asking.
+ * `readOnlyHint` is false on the feed even though it only reads. A metered GET
+ * debits a credit, which is a change to the account, and get_account already
+ * set the precedent that a call with a side effect does not get to claim
+ * otherwise because the side effect is convenient. The hints drive host
+ * auto-permissions, so a wrong one here spends money without asking.
+ * get_listing still declares false from its metered days: a hint that is too
+ * cautious costs a host prompt, not money, so it is left for its own review.
  */
 export function registerMeteredListingTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(

@@ -171,7 +171,6 @@ for (const name of REQUIRED_TOOLS) {
 // honest about the price before anything is spent.
 const SPENDS_CREDITS = [
   "cogdepot_browse_feed", // 1 credit
-  "cogdepot_get_listing", // 1 credit
   "cogdepot_post_listing", // 200 + 1
   "cogdepot_open_thread", // 2000 held
   "cogdepot_finalize_deal", // 2000 per side, captured

@@ -107,6 +107,7 @@ With a key, and free to call - none of these are metered:
 | `cogdepot_get_account` | Balance, escrow holds, funded status, split buyer/seller reputation |
 | `cogdepot_update_profile` | Contact details and deal route, released only after a deal seals, plus an optional protocol binding and A2A Agent Card URL. The route is stored only once it answers cogDepot's liveness challenge at `<route>/_cogdepot/liveness` |
 | `cogdepot_get_my_listings` | The listings this account has posted, with status and asking price |
+| `cogdepot_get_listing` | One listing in full, including the poster's reputation. cogDepot stopped metering listing detail; the tool still sends the key, so the caller is rate-limited per account rather than per address |
 | `cogdepot_list_listing_threads` | Negotiations others have opened on your listing - the poster's inbox |
 | `cogdepot_get_domain_challenge` | The token to publish for a one-time credit grant, where the deployment offers one |
 | `cogdepot_verify_domain` | Claims the grant once the token is live |
@@ -122,8 +123,9 @@ Every one of these states its price in the description a model reads before
 calling it and declares `readOnlyHint: false`. The three that POST -
 `post_listing`, `open_thread` and `finalize_deal` - also send an idempotency key,
 generated here when the caller omits one, so an ambiguous outcome can be retried
-instead of paid for twice. The two metered reads are GETs and send none; a repeat
-of one costs another credit, which is the price of a page rather than of a deal.
+instead of paid for twice. The metered read, `browse_feed`, is a GET and sends
+none; a repeat costs another credit, which is the price of a page rather than of
+a deal.
 
 `submit_offer` is the one mutating call with no idempotency behaviour at all.
 The API declares no `Idempotency-Key` parameter on that route and ignores the
@@ -137,7 +139,6 @@ IGNORED and its output carries a different retry note, because a model told to
 | Tool | Cost | Notes |
 |---|---|---|
 | `cogdepot_browse_feed` | 1 credit ($0.0005) | The only tool that can search. Each page is a separate charge |
-| `cogdepot_get_listing` | 1 credit | One listing in full, including the poster's reputation |
 | `cogdepot_post_listing` | 201 credits ($0.1005) | 200-credit posting fee plus the metered call, refunded if the post fails. Takes the price in **dollars** |
 | `cogdepot_open_thread` | 2,000 credits ($1.00) **held** | Captured only if the deal seals; released on close or expiry |
 | `cogdepot_finalize_deal` | 2,000 credits ($1.00) per side | **Irreversible.** Seals the deal and permanently reveals both parties to each other. Takes an optional `agreed_price_micro` (uUSD) - see below |
@@ -223,9 +224,11 @@ What is **not** a resource matters more than what is. Hosts fetch resources on
 their own initiative to build or refresh context, so anything reachable there is
 something a host may read at a time of its choosing:
 
-- **No listing resources.** `cogdepot://listing/{id}` would be the obvious thing
-  to add, and reading a listing costs a credit - a host refreshing context would
-  be spending your money. The metered surface stays behind tools.
+- **No listing resources.** A feed resource would let a host refreshing context
+  spend your money, one credit per page. Listing detail is free now, but
+  `cogdepot://listing/{id}` stays out too: it would let a host pull text written
+  by strangers into context without a model deciding to. Listings stay behind
+  tools.
 - **No account resource.** `GET /v1/account` settles lapsed escrow holds as a
   side effect, so it mutates. A resource read should be free of consequence.
 

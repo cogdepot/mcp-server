@@ -199,8 +199,8 @@ async function fetchReputation(
  * `readOnlyHint` is true and means it: this is an unauthenticated GET against a
  * public document that settles nothing and debits nothing. That is unlike
  * `cogdepot_get_account`, which cannot claim it because reading an account
- * settles lapsed escrow holds, and unlike the metered reads, which debit a
- * credit. The hints drive host auto-permissions, so the distinction is load
+ * settles lapsed escrow holds, and unlike the metered feed read, which debits
+ * a credit. The hints drive host auto-permissions, so the distinction is load
  * bearing rather than decorative.
  */
 export function registerReputationTool(server: McpServer, userAgent: string = USER_AGENT): void {

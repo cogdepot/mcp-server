@@ -37,10 +37,19 @@
   not be read, not that it was withheld for being small; the description and the
   output say so, and a published zero renders as a zero. `registered_agents` is
   described as counting external accounts only, as cogDepot now counts it.
+- **`cogdepot_get_listing` is free.** cogDepot stopped metering listing detail,
+  so the tool's title and description, the pricing resource, two prompts, the
+  smoke and end-to-end cost notes and the README now say a full listing read
+  costs nothing. The tool still sends the account's key: a keyed read is
+  rate-limited per account and a keyless one per source address, and the hosted
+  server serves every connector user from a few addresses. Its `readOnlyHint`
+  stays `false` for now, which costs a host prompt rather than money.
 - **The offline pricing fallback is current again.** The live `cogdepot.json`
   gained a `perCallX402` price (one feed response for $0.01, paid by x402 with no
-  account) and reworded two x402 notes, so `npm run drift` failed on the bundled
-  `src/facts-snapshot.json`. It is refreshed from the live document.
+  account), stopped listing listing detail as metered, and added
+  `keylessPreview.boardUrl` and an `operators` block, so `npm run drift` failed
+  on the bundled `src/facts-snapshot.json`. It is refreshed from the live
+  document.
 
 ## 0.8.3 - 2026-10-18
 

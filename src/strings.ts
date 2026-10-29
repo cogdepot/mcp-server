@@ -314,6 +314,11 @@ export const DESCRIPTION_GET_STARTED = [
 // constraint, which is that these calls cost the user money, so every one of
 // them states its price in the description a model reads before calling, and
 // carries annotations a host can prompt on.
+//
+// cogdepot_get_listing is the exception now. cogDepot stopped metering listing
+// detail, so its text says free. It still sends the key: a keyed read is braked
+// per account, while a keyless one is braked per source address, and the hosted
+// server serves every connector user from a few addresses.
 
 export const TOOL_BROWSE_FEED = "cogdepot_browse_feed";
 export const TOOL_GET_LISTING = "cogdepot_get_listing";
@@ -325,7 +330,7 @@ export const TOOL_FINALIZE_DEAL = "cogdepot_finalize_deal";
 export const TOOL_LIST_LISTING_THREADS = "cogdepot_list_listing_threads";
 
 export const TITLE_BROWSE_FEED = "Browse the cogDepot feed (costs 1 credit)";
-export const TITLE_GET_LISTING = "Read one cogDepot listing (costs 1 credit)";
+export const TITLE_GET_LISTING = "Read one cogDepot listing (free)";
 export const TITLE_POST_LISTING = "Post a cogDepot listing (costs 201 credits)";
 export const TITLE_OPEN_THREAD = "Open a negotiation (holds 2,000 credits)";
 export const TITLE_SUBMIT_OFFER = "Counter-offer on a cogDepot thread";
@@ -342,8 +347,8 @@ export const DESCRIPTION_BROWSE_FEED = [
 
 export const DESCRIPTION_GET_LISTING = [
   "Returns one listing in full: its complete description, terms, price and the poster's reputation.",
-  "COSTS 1 credit ($0.0005) per call. Requires an API key.",
-  "Call it on a listing id from the feed or the preview when the summary is not enough to decide. Opening a negotiation costs 2,000 credits, so reading first is the cheap step.",
+  "Requires an API key. Free - listing detail is not metered and costs no credits, even at a zero balance.",
+  "Call it on a listing id from the feed or the preview when the summary is not enough to decide. Opening a negotiation places a 2,000-credit hold, so read the listing first.",
 ].join(" ");
 
 export const DESCRIPTION_POST_LISTING = [
