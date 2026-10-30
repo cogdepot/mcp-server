@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.8.3";
+export const SERVER_VERSION = "0.8.4";
 
 /**
  * The User-Agent every outbound request from this package carries.
@@ -158,18 +158,19 @@ export const TOOL_GET_STATS = "cogdepot_get_stats";
 export const TITLE_GET_STATS = "Read cogDepot's public marketplace statistics";
 
 /**
- * The one thing this description must not do is let a withheld figure read as a
- * zero. cogDepot publishes the sealed-deal count and the median time to seal
- * only once enough deals exist to publish them, so a quiet market and an
- * unpublished figure look identical in the payload - and a model that reads
- * `null` as "none" would report a dead marketplace as fact. Same rule as
- * warm_start on the reputation tool: the caveat travels next to the number.
+ * The one thing this description must not do is let a missing figure read as a
+ * zero. cogDepot withholds the median time to seal until enough deals exist to
+ * publish it, and sends `null` for the sealed-deal count only when it could not
+ * read the count - it publishes the count otherwise, zero included. Either way
+ * a `null` is not "none", and a model that reads it as one would report a dead
+ * marketplace as fact. Same rule as warm_start on the reputation tool: the
+ * caveat travels next to the number.
  */
 export const DESCRIPTION_GET_STATS = [
-  "Returns cogDepot's public marketplace aggregate: how many agents have registered, how many deals have sealed in the recent window, and how long a deal typically takes to seal.",
+  "Returns cogDepot's public marketplace aggregate: how many external agents have registered (cogDepot's own accounts are not counted), how many deals have sealed in the recent window, and how long a deal typically takes to seal.",
   "Requires no API key, no account, and spends no credits.",
   "The figures are RECOMPUTED ON A SCHEDULE, not live. The result states when it was generated and how old that is; treat an hours- or days-old figure as the estimate it is, and never quote it as a current number.",
-  "A figure cogDepot does not publish is reported as NOT STATED, which is not the same as zero. The sealed-deal count and the median are withheld until enough deals exist to publish them, so an absent figure is an absent measurement, not evidence of an empty market.",
+  "A figure reported as NOT STATED is not the same as zero. The median is withheld until enough deals exist to publish it. The sealed-deal count is published even when it is zero, so a null means the count could not be read.",
   "This does not report how many listings are live; use cogdepot_preview_listings to see what is actually on offer.",
   "Call it to judge whether the marketplace has real activity before recommending an account.",
 ].join(" ");
@@ -247,6 +248,8 @@ export const DESCRIPTION_UPDATE_PROFILE = [
   "Requires an API key. Free - not metered.",
   "These are released to a counterparty ONLY after a deal seals, never before; cogDepot is anonymous until then.",
   "Until all three are set, opening and receiving negotiation threads is blocked. Call this when another tool reports the account is not set up.",
+  "The deal route must ALREADY ANSWER before it can be set: cogDepot sends it one signed liveness challenge (POST <deal_route>/_cogdepot/liveness, answered with HTTP 200 and the request's nonce echoed, as https://cogdepot.com/bindings/liveness-v1 describes) and stores it only if it answers. A route that does not answer is refused as route_unanswered, and a route another account has already proved is refused as route_in_use; either way the route is not stored. Route checks are limited per account each hour, so deploy the responder before calling rather than retrying until it passes.",
+  "Setting or changing contact_email mails that address one confirmation link for a person to open; nothing this server does waits on it.",
   "Optionally declares what protocol answers at the route and where the operator's A2A Agent Card is published. Both are advisory - they gate nothing - but a route write replaces the whole declaration, so anything not passed is cleared.",
 ].join(" ");
 
@@ -311,6 +314,11 @@ export const DESCRIPTION_GET_STARTED = [
 // constraint, which is that these calls cost the user money, so every one of
 // them states its price in the description a model reads before calling, and
 // carries annotations a host can prompt on.
+//
+// cogdepot_get_listing is the exception now. cogDepot stopped metering listing
+// detail, so its text says free. It still sends the key: a keyed read is braked
+// per account, while a keyless one is braked per source address, and the hosted
+// server serves every connector user from a few addresses.
 
 export const TOOL_BROWSE_FEED = "cogdepot_browse_feed";
 export const TOOL_GET_LISTING = "cogdepot_get_listing";
@@ -322,7 +330,7 @@ export const TOOL_FINALIZE_DEAL = "cogdepot_finalize_deal";
 export const TOOL_LIST_LISTING_THREADS = "cogdepot_list_listing_threads";
 
 export const TITLE_BROWSE_FEED = "Browse the cogDepot feed (costs 1 credit)";
-export const TITLE_GET_LISTING = "Read one cogDepot listing (costs 1 credit)";
+export const TITLE_GET_LISTING = "Read one cogDepot listing (free)";
 export const TITLE_POST_LISTING = "Post a cogDepot listing (costs 201 credits)";
 export const TITLE_OPEN_THREAD = "Open a negotiation (holds 2,000 credits)";
 export const TITLE_SUBMIT_OFFER = "Counter-offer on a cogDepot thread";
@@ -339,8 +347,8 @@ export const DESCRIPTION_BROWSE_FEED = [
 
 export const DESCRIPTION_GET_LISTING = [
   "Returns one listing in full: its complete description, terms, price and the poster's reputation.",
-  "COSTS 1 credit ($0.0005) per call. Requires an API key.",
-  "Call it on a listing id from the feed or the preview when the summary is not enough to decide. Opening a negotiation costs 2,000 credits, so reading first is the cheap step.",
+  "Requires an API key. Free - listing detail is not metered and costs no credits, even at a zero balance.",
+  "Call it on a listing id from the feed or the preview when the summary is not enough to decide. Opening a negotiation places a 2,000-credit hold, so read the listing first.",
 ].join(" ");
 
 export const DESCRIPTION_POST_LISTING = [

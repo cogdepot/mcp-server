@@ -106,6 +106,23 @@ export function isValidAgentCardUrl(value: string): boolean {
   return !isUnreachableCardHost(url.hostname);
 }
 
+/**
+ * Whether a URL uses port 443, the only port the API accepts for a deal route.
+ *
+ * URL drops a spelled-out default port, so `https://acme.example:443/d` reads
+ * back with an empty port and passes, while `:8443` does not. Checked here
+ * because the contact write runs first: a route the API refuses after it leaves
+ * half the profile saved and a confirmation link mailed, for an input the
+ * schema could have turned away.
+ */
+export function usesHttpsDefaultPort(value: string): boolean {
+  try {
+    return new URL(value).port === "";
+  } catch {
+    return false;
+  }
+}
+
 interface AccountResponse {
   readonly account_id?: string;
   readonly balance_micro?: number;
@@ -171,7 +188,12 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
           .string()
           .url()
           .startsWith("https://", "must be an https URL")
-          .describe("Your https route base for per-deal contact, released only after a deal seals"),
+          .refine(usesHttpsDefaultPort, { message: "must use port 443: leave the port out" })
+          .describe(
+            "Your https route base for per-deal contact, released only after a deal seals. Port " +
+              "443 only. It must already answer cogDepot's signed liveness challenge at " +
+              "<deal_route>/_cogdepot/liveness, or it is refused and not stored.",
+          ),
         contact_url: z
           .string()
           .url()
@@ -218,7 +240,11 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        // The stored profile ends the same either way, but a repeat is not free
+        // of effect: every call sends the route a fresh liveness challenge,
+        // counted against a per-account hourly limit, and can mail an
+        // unconfirmed contact address again. Same reasoning as verify_domain.
+        idempotentHint: false,
         openWorldHint: true,
       },
     },
@@ -293,8 +319,8 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
               text:
                 `Partly applied: the contact details WERE saved, the deal route was NOT.\n\n` +
                 `${partial.content[0]?.text ?? ""}\n\n` +
-                "Re-running this tool is safe - both writes are idempotent. Until the route is " +
-                "set, opening and receiving threads stays blocked.",
+                "Re-running this tool is safe - both writes are idempotent - once the cause above " +
+                "is dealt with. Until the route is set, opening and receiving threads stays blocked.",
             },
           ],
         };

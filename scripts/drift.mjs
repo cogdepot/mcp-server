@@ -47,12 +47,8 @@ const COVERED = {
   "POST /v1/threads/{id}/offers": "cogdepot_submit_offer",
   "POST /v1/threads/{id}/close": "cogdepot_close_thread",
   "POST /v1/threads/{id}/finalize": "cogdepot_finalize_deal",
-  // Note: GET /v1/listings/mine is NOT listed here, though cogdepot_get_my_listings
-  // covers it. Like POST /v1/account/web below, it is a real route the published
-  // OpenAPI omits - unauthenticated it answers 401, exactly as /v1/account does,
-  // where a path that does not exist answers 404. Listing it would trip the stale
-  // check on every run, so the tool is real and this guard cannot see it. If the
-  // API ever publishes the route, move it up here.
+  // An owner self-read the tool called before the spec described the route.
+  "GET /v1/listings/mine": "cogdepot_get_my_listings",
 };
 
 /** Paths deliberately not exposed, each with the decision behind it. */
@@ -60,7 +56,7 @@ const EXCLUDED = {
   "POST /v1/account/register":
     "Sends accepted_terms: true. A tool must not accept a legal agreement unattended; cogdepot_get_started explains the route instead.",
 
-  // Certified Live (cogDepot T1045) and the public ledger check were published in
+  // Certified Live and the public ledger check were published in
   // cogDepot's spec after this list was last reviewed; drift caught them on
   // 2026-10-18. Recorded here as decisions rather than left as silence.
   "POST /v1/account/certification":
@@ -108,6 +104,66 @@ const EXCLUDED = {
     "exists for OFFLINE verification against the key at /.well-known/paseto-keys.json by a " +
     "party that cannot call the API, which is never the situation an MCP tool is in.",
 
+  // The other two owner self-reads. Tools for both were decided on 2026-10-28 for
+  // a later release; when they ship, move both to COVERED.
+  "GET /v1/threads/mine":
+    "Lists the caller's own open negotiations. No tool yet, by decision: one is planned " +
+    "for a later release. Until then a model " +
+    "lists the threads on its own listings through cogdepot_list_listing_threads, and " +
+    "reaches a thread it opened as buyer only through cogdepot_get_thread with the id " +
+    "cogdepot_open_thread returned.",
+  "GET /v1/journal":
+    "Reads the caller's own money journal. No tool yet, by decision: one is planned for " +
+    "a later release. Until then cogdepot_get_account reports the balance.",
+
+  // The want board's operations: standing requests to be told when a matching
+  // listing goes live, the links that confirm and end them, the public demand
+  // index, and invites for unlisted listings.
+  "GET /v1/board":
+    "Keyless first page of the feed: the 20 newest live listings, no cursor, no filter. " +
+    "That is the question cogdepot_preview_listings already answers keyless from the " +
+    "storefront preview, so a second tool would give a model two names for one read. " +
+    "Whether that tool moves onto this route is a later release's call; the paged, " +
+    "filterable read stays cogdepot_browse_feed.",
+  "GET /v1/wants/summary":
+    "Keyless public index of confirmed demand: per category, how many distinct sources " +
+    "want something and, from five of them, a band for the median limit price. A fact a " +
+    "seller's model could act on when deciding what to list and at what price, on the same " +
+    "footing as GET /stats.json. No tool yet, by decision: one is planned for a later release.",
+  "POST /v1/wants":
+    "Registers a want - a standing request to be told when a matching listing goes live - " +
+    "or, with kind message, leaves a note for cogDepot's operator. No tool yet, by decision. " +
+    "A keyless want mails a confirmation link to, or sends a challenge to, whatever address " +
+    "or URL the caller names, so an unattended tool could make cogDepot contact a party who " +
+    "never asked: the harm-to-a-third-party reasoning of the dispute entry above. A keyed " +
+    "want notifies only the account's own contact e-mail and carries none of that risk; a " +
+    "tool for that form alone is planned for a later release.",
+  "POST /v1/wants/confirm":
+    "Confirms a keyless want's e-mail address with the token from the link mailed to it. " +
+    "Posting that token is the mailbox owner's consent to be mailed, made from their own " +
+    "inbox; a tool that relayed it would turn the consent into a formality. A credential, " +
+    "not a fact, on the attestation entry's reasoning.",
+  "POST /v1/wants/unsubscribe":
+    "Deletes a want with the token from the unsubscribe link every notice carries. The " +
+    "token lives in the recipient's mail and is posted from cogDepot's storefront page; a " +
+    "model never holds one, and no tool here registers the want it would remove.",
+  "POST /v1/wants/{id}/webhook-proof":
+    "Proves a keyless webhook want by having cogDepot POST one challenge to the want's " +
+    "notify URL. It serves the keyless want flow excluded above, and the answer it checks " +
+    "is keyed with the webhook_key returned once at registration: a credential, not a fact.",
+  "POST /v1/account/contact/confirm":
+    "Confirms the account's contact e-mail with the token from the link that PUT " +
+    "/v1/account/contact mails to it. The confirmation is the mailbox owner's own act, made " +
+    "from their inbox, and the token is a credential a model should never be handed. " +
+    "Nothing a tool here does waits on it; only want notices do.",
+  "POST /v1/listings/{id}/invite":
+    "Mints a bearer invite token for the caller's own unlisted listing, shown once and kept " +
+    "by nobody: every account it reaches may open one thread. A credential, not a fact, and " +
+    "the wrong thing to put in a tool result that hosts log and models repeat. It is also " +
+    "not retry-safe: a retry after a lost response mints a second token in one of five " +
+    "slots, and the orphaned first one works until it expires. The operator hands it over " +
+    "out of band, and no tool here posts an unlisted listing.",
+
   "GET /.well-known/jwks.json":
     "JWK Set carrying the public half of the Agent Card signing key. Key material for " +
     "verifying a signature offline, not a fact about the market - there is nothing here " +
@@ -117,6 +173,10 @@ const EXCLUDED = {
     "Excluded on the reasoning already written against POST /v1/account/reputation/attestation: " +
     "these keys exist for OFFLINE verification by a party that cannot call the API, which is " +
     "never the situation an MCP tool is in.",
+  "GET /.well-known/operators.json":
+    "An invitation addressed to the people who run monitors, indexes and verifiers that " +
+    "read cogDepot, pointing them at the storefront page where they introduce themselves. " +
+    "Not agent-facing: nothing in it a model finding or making a deal could act on.",
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
   "GET /.well-known/cogdepot.json": "Read directly as the live-facts source.",

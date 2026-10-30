@@ -42,7 +42,7 @@ const confirmed = process.env.COGDEPOT_E2E_CONFIRM === "spend";
 
 const ESTIMATED_COST = [
   "  poster:      201 credits to post, 2,000 at seal        = 2,201 ($1.1005)",
-  "  negotiator:  ~2 credits to browse and read, 2,000 held = ~2,002 ($1.001)",
+  "  negotiator:  1 credit to browse (the read is free), 2,000 held = 2,001 ($1.0005)",
   "  total:       roughly $2.10, non-refundable once sealed",
   "",
   "  The idempotency replay and the balance reads are free: a replay is served",
@@ -294,7 +294,7 @@ try {
     );
   }
 
-  // 5. Read it in full. 1 credit. This is the renderer that has to cope with a
+  // 5. Read it in full. Free. This is the renderer that has to cope with a
   // 10,000-character markdown body and the poster's reputation facet.
   await call(negotiator, "negotiator", "cogdepot_get_listing", { listing_id: listingId });
 

@@ -430,6 +430,60 @@ describe("keyed tools", () => {
     await close();
   });
 
+  it.each([
+    ["route_unanswered", "liveness-v1", false],
+    ["route_in_use", "tell the operator", true],
+  ])(
+    "reports a %s refusal of the route as a partial write with its own guidance",
+    async (reason, guidance, doNotRetry) => {
+      // The contact write lands first, so a refused route is always a partial
+      // write. The caller needs both facts: what was saved, and why the route
+      // was not, in words that say whether retrying can help.
+      vi.stubGlobal(
+        "fetch",
+        routeFetch({
+          "cogdepot.json": { status: 200, body: DISCOVERY },
+          "/v1/account/contact": { status: 204 },
+          "/v1/account/route": { status: 409, body: { reason, status: 409 } },
+        }),
+      );
+
+      const { client, close } = await connectWithKey();
+      const { text, isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+        contact_name: "n",
+        contact_email: "e@e.com",
+        deal_route: "https://e.com/d",
+      });
+
+      expect(isError).toBe(true);
+      expect(text).toContain("contact details WERE saved");
+      expect(text).toContain("deal route was NOT");
+      expect(text).toContain(guidance);
+      expect(text.includes("Do not retry this call unchanged.")).toBe(doNotRetry);
+      await close();
+    },
+  );
+
+  it("tells a model the route must answer the liveness challenge before it is stored", async () => {
+    vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }));
+    const { client, close } = await connectWithKey();
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === TOOL_UPDATE_PROFILE);
+    const description = tool?.description ?? "";
+    const routeSchema = (tool?.inputSchema as { properties?: Record<string, { description?: string }> })
+      ?.properties?.["deal_route"];
+
+    expect(description).toContain("/_cogdepot/liveness");
+    expect(description).toContain("route_unanswered");
+    expect(description).toContain("route_in_use");
+    expect(routeSchema?.description).toContain("/_cogdepot/liveness");
+    // Each call re-sends the challenge against a per-account hourly limit and
+    // can re-mail an unconfirmed contact, so a host must not treat a repeat as
+    // free to retry blindly.
+    expect(tool?.annotations?.idempotentHint).toBe(false);
+    await close();
+  });
+
   it("does not report a partial write when the first call is the one that fails", async () => {
     vi.stubGlobal(
       "fetch",

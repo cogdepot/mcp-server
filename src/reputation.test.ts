@@ -400,7 +400,7 @@ describe("the keyless reputation lookup", () => {
 
   it("is annotated read-only, which it genuinely is", async () => {
     // Unlike cogdepot_get_account, which settles lapsed escrow holds, and unlike
-    // the metered reads, which debit a credit. The hints drive host
+    // the metered feed read, which debits a credit. The hints drive host
     // auto-permissions, so a wrong one here matters.
     vi.stubGlobal("fetch", routeFetch({ "cogdepot.json": { status: 200, body: DISCOVERY } }).impl);
 

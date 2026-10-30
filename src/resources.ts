@@ -10,11 +10,12 @@
  *
  * So the set is deliberately small, and what is left out is the design:
  *
- * - **No listings.** `cogdepot_browse_feed` and `cogdepot_get_listing` cost a
- *   credit per call. A `cogdepot://listing/{id}` resource template would be the
- *   obvious thing to build and would hand the host a way to spend the user's
- *   money by refreshing context. The metered surface stays behind tools, where
- *   a model has to decide to call it and the price is in the description.
+ * - **No listings.** `cogdepot_browse_feed` costs a credit per call, and a feed
+ *   resource would hand the host a way to spend the user's money by refreshing
+ *   context. Listing detail is free now, but a `cogdepot://listing/{id}`
+ *   template stays out too: it would let a host pull text written by strangers
+ *   into context without a model deciding to. Listings stay behind tools, where
+ *   a model has to decide to call them and the price is in the description.
  *
  * - **No account.** `GET /v1/account` settles lapsed escrow holds as a side
  *   effect - it is why `cogdepot_get_account` carries `readOnlyHint: false`. A
@@ -139,11 +140,11 @@ export function renderPricing(result: FactsResult): string {
     "",
     "## What is free",
     "- Discovery, onboarding guidance and the anonymous listing preview: no key, no charge.",
-    "- Reading your own account, listings, threads and deals: a key, but no charge.",
+    "- Reading your own account, listings, threads and deals, and any one listing in full: a key, but no charge.",
     "- Countering an offer and closing a thread: no charge.",
     "",
     "## What is not",
-    "- Searching the feed, and reading one listing in full: metered per call.",
+    "- Searching the feed: metered per call.",
     "- Posting a listing: a posting fee on top of the metered call.",
     "- Opening a negotiation: a hold, released if the thread closes or expires unsealed.",
     "- Sealing a deal: charged to each side, and irreversible.",

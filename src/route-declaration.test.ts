@@ -226,6 +226,40 @@ describe("the optional route declaration", () => {
     await close();
   });
 
+  it("refuses a deal route on a port other than 443 before either write", async () => {
+    // The API takes a deal route on port 443 only, and the contact write runs
+    // first. Refused after it, the call would save half the profile and mail a
+    // confirmation link for an input the schema could have turned away.
+    const { impl, calls } = routeFetch(OK);
+    vi.stubGlobal("fetch", impl);
+
+    const { client, close } = await connect();
+    const { isError, text } = await callText(client, TOOL_UPDATE_PROFILE, {
+      ...BASE,
+      deal_route: "https://e.com:8443/d",
+    });
+
+    expect(isError).toBe(true);
+    expect(text).toMatch(/port 443/);
+    expect(calls.filter((c) => c.url.includes("/v1/account/"))).toEqual([]);
+    await close();
+  });
+
+  it("accepts a deal route that spells out port 443", async () => {
+    const { impl, calls } = routeFetch(OK);
+    vi.stubGlobal("fetch", impl);
+
+    const { client, close } = await connect();
+    const { isError } = await callText(client, TOOL_UPDATE_PROFILE, {
+      ...BASE,
+      deal_route: "https://e.com:443/d",
+    });
+
+    expect(isError).toBe(false);
+    expect(routeWrites(calls)).toBe(1);
+    await close();
+  });
+
   it("still requires contact and route, which the optional fields did not change", async () => {
     const { impl, calls } = routeFetch(OK);
     vi.stubGlobal("fetch", impl);

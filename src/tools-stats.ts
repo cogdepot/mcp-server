@@ -17,12 +17,12 @@
  *
  * Two things this file must never do.
  *
- * It must never let a withheld figure read as a zero. cogDepot publishes the
- * sealed-deal count and the median time to seal only once enough deals exist to
- * publish them, and sends `null` until then. A quiet market and an unpublished
- * measurement are the same bytes, so rendering `null` as "0" - or omitting the
- * line - would state "no deals have sealed" as fact from data that says no such
- * thing. Absent figures are named as not stated, next to the reason.
+ * It must never let a missing figure read as a zero. cogDepot withholds the
+ * median time to seal until enough deals exist to publish it, and sends `null`
+ * for the sealed-deal count only when it could not read the count; otherwise the
+ * count is published, zero included. Rendering either `null` as "0" - or
+ * omitting the line - would state something as fact from data that says no
+ * such thing. Absent figures are named as not stated, next to the reason.
  *
  * And it must never present a scheduled recompute as live. The payload carries
  * `generated_at`; at the time of writing the live document was two days old
@@ -123,7 +123,7 @@ export function renderStats(raw: Record<string, unknown>, now: number = Date.now
   lines.push(
     agents === undefined
       ? "Registered agents: not stated"
-      : `Registered agents: ${agents}. This counts accounts that exist, not accounts that have traded.`,
+      : `Registered agents: ${agents}. This counts external accounts only - cogDepot's own accounts are left out - and accounts that exist, not accounts that have traded.`,
   );
 
   const windowDays = num(raw["sealed_deals_window_days"]);
@@ -131,7 +131,7 @@ export function renderStats(raw: Record<string, unknown>, now: number = Date.now
   const sealed = num(raw["sealed_deals"]);
   lines.push(
     sealed === undefined
-      ? `Deals sealed in ${window}: NOT STATED. cogDepot withholds this figure rather than publishing a small one. Not stated is not zero, and this is not evidence that no deals are happening.`
+      ? `Deals sealed in ${window}: NOT STATED. cogDepot publishes this count even when it is zero, so an absent count means it could not be read. Not stated is not zero: it says nothing about how many deals sealed.`
       : `Deals sealed in ${window}: ${sealed}`,
   );
 
@@ -156,16 +156,19 @@ export function renderStats(raw: Record<string, unknown>, now: number = Date.now
     lines.push("", "Also reported by cogDepot, and not interpreted by this tool:", ...extras);
   }
 
-  // The guidance adapts to what actually came back. Explaining what a withheld
-  // figure means when nothing was withheld is noise, and noise in the part a
+  // The guidance adapts to what actually came back. Explaining what a missing
+  // figure means when nothing is missing is noise, and noise in the part a
   // model is meant to weigh most heavily is the part it learns to skip.
-  const withheld = sealed === undefined || median === undefined;
-  lines.push(
-    "",
-    withheld
-      ? "How to weigh this: registered_agents counts sign-ups rather than activity - a registered agent may have done nothing. The figures that would show real trading are the ones cogDepot suppresses while they are small, so the most decision-relevant numbers here are precisely the absent ones. Read a NOT STATED as an absent measurement, never as a zero, and do not report this marketplace as busy or as dead on the strength of it."
-      : "How to weigh this: registered_agents counts sign-ups rather than activity - a registered agent may have done nothing. The sealed-deal count is the figure that shows real trading, since each one cost both sides a fee.",
-  );
+  const weighing = [
+    "How to weigh this: registered_agents counts external sign-ups rather than activity - a registered agent may have done nothing.",
+    sealed === undefined
+      ? "The sealed-deal count is the figure that would show real trading, and it could not be read this time, so this result says nothing about how much trading there is. Read its NOT STATED as unknown, never as a zero, and do not report this marketplace as busy or as dead on the strength of it."
+      : "The sealed-deal count is the figure that shows real trading, since each one cost both sides a fee.",
+  ];
+  if (median === undefined) {
+    weighing.push("A NOT STATED median is an absent measurement, not a zero.");
+  }
+  lines.push("", weighing.join(" "));
 
   if (age) {
     lines.push(

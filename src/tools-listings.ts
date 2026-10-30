@@ -4,9 +4,11 @@
  * - `cogdepot_preview_listings` is keyless, anonymous and free, and returns an
  *   unfiltered sample of 20.
  * - `cogdepot_get_my_listings` is keyed and free, and shows only the caller's own.
- * - `cogdepot_browse_feed`, `cogdepot_get_listing` and `cogdepot_post_listing`
- *   are keyed and metered. They are the ones that can search, and the ones that
- *   cost money.
+ * - `cogdepot_browse_feed` and `cogdepot_post_listing` are keyed and metered.
+ *   They are the ones that can search, and the ones that cost money.
+ * - `cogdepot_get_listing` is keyed and free: cogDepot stopped metering listing
+ *   detail. It still sends the key, so a caller is braked per account rather
+ *   than per source address, which the hosted server shares across its users.
  *
  * Two things make the preview unlike every other call in this package.
  *
@@ -21,11 +23,9 @@
  * without cogDepot learning which account is looking, which is the property the
  * endpoint exists to offer.
  *
- * `GET /v1/listings/mine`, behind the keyed tool, is a real route that the
- * published OpenAPI omits - the API's route list is hand-curated and several
- * registered routes are left out on purpose. Confirmed by probe rather than
- * assumed: unauthenticated it answers 401, exactly as `/v1/account` does, where
- * a path that genuinely does not exist answers 404.
+ * `GET /v1/listings/mine`, behind the keyed tool, was a real route the
+ * published OpenAPI left out for a while - the API's route list is hand-curated.
+ * It is in the spec now, and scripts/drift.mjs covers it like any other route.
  */
 
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -136,13 +136,48 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
 }
 
 /**
+ * One listing in full. Keyed but free: cogDepot stopped metering listing
+ * detail, so the read changes nothing on the account and declares
+ * `readOnlyHint: true`, like the other free keyed reads. It still sends the
+ * key, so the caller is braked per account rather than per source address.
+ */
+export function registerListingDetailTool(server: McpServer, client: CogDepotClient): void {
+  server.registerTool(
+    TOOL_GET_LISTING,
+    {
+      title: TITLE_GET_LISTING,
+      description: DESCRIPTION_GET_LISTING,
+      inputSchema: z.object({
+        listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ listing_id }) => {
+      try {
+        const listing = await client.request<Record<string, unknown>>(
+          `/v1/listings/${encodeURIComponent(listing_id)}`,
+        );
+        return toolText(renderOneListing(listing));
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+}
+
+/**
  * The metered listing tools. Every one of these costs the user money.
  *
- * `readOnlyHint` is false even on the two that only read. A metered GET debits a
- * credit, which is a change to the account, and get_account already set the
- * precedent that a call with a side effect does not get to claim otherwise
- * because the side effect is convenient. The hints drive host auto-permissions,
- * so a wrong one here spends money without asking.
+ * `readOnlyHint` is false on the feed even though it only reads. A metered GET
+ * debits a credit, which is a change to the account, and get_account already
+ * set the precedent that a call with a side effect does not get to claim
+ * otherwise because the side effect is convenient. The hints drive host
+ * auto-permissions, so a wrong one here spends money without asking.
  */
 export function registerMeteredListingTools(server: McpServer, client: CogDepotClient): void {
   server.registerTool(
@@ -201,32 +236,6 @@ export function registerMeteredListingTools(server: McpServer, client: CogDepotC
     },
   );
 
-  server.registerTool(
-    TOOL_GET_LISTING,
-    {
-      title: TITLE_GET_LISTING,
-      description: DESCRIPTION_GET_LISTING,
-      inputSchema: z.object({
-        listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
-      }),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async ({ listing_id }) => {
-      try {
-        const listing = await client.request<Record<string, unknown>>(
-          `/v1/listings/${encodeURIComponent(listing_id)}`,
-        );
-        return toolText(renderOneListing(listing));
-      } catch (error) {
-        return toolError(error);
-      }
-    },
-  );
 
   server.registerTool(
     TOOL_POST_LISTING,
@@ -430,11 +439,12 @@ async function fetchPreview(
 /**
  * Narrows whatever `/v1/listings/mine` returns to an array of listings.
  *
- * Tolerant of both `{listings:[...]}` and a bare array because the route is
- * absent from the published OpenAPI, so its response shape is not something this
- * package can read off a contract. An unrecognised shape yields an empty list,
- * which the renderer reports as "none" rather than as an error - the alternative
- * is failing a free, read-only call over a wrapper key.
+ * Tolerant of both `{listings:[...]}` and a bare array because the parser was
+ * written while the route was absent from the published OpenAPI, so its response
+ * shape could not be read off a contract. The spec now describes it with the
+ * `{listings:[...]}` wrapping, the feed's page shape. An unrecognised shape
+ * yields an empty list, which the renderer reports as "none" rather than as an
+ * error - the alternative is failing a free, read-only call over a wrapper key.
  */
 function asListings(body: unknown): Record<string, unknown>[] {
   if (Array.isArray(body)) return body.filter(isRecord);

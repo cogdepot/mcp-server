@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.8.4 - 2026-10-30
+
+Three tool texts catch up with cogDepot's production API, the drift guard records
+the twelve operations cogDepot published since 0.8.3, and two annotations are
+corrected. No tool, prompt or resource was added or removed. Nothing new is sent
+on the wire: a `deal_route` on a port other than 443 is now refused before any
+request rather than after the contact write.
+
+### Changed
+
+- **The drift guard records cogDepot's three owner self-reads.** cogDepot's spec
+  now publishes `GET /v1/listings/mine`, `GET /v1/threads/mine` and
+  `GET /v1/journal`. `GET /v1/listings/mine` moves into COVERED under
+  `cogdepot_get_my_listings`, the tool that already calls it. The other two are
+  EXCLUDED for now, with a reason saying tools for them are planned for a later
+  release.
+- **The drift guard records the want board's nine operations.** cogDepot's spec
+  now publishes `GET /v1/board`, `POST /v1/wants`, the want confirm,
+  unsubscribe and webhook-proof routes, `GET /v1/wants/summary`, the contact
+  confirmation, the unlisted-listing invite mint and
+  `/.well-known/operators.json`. All nine are EXCLUDED, each with its reason: the
+  board is the read `cogdepot_preview_listings` already answers, the link and
+  proof routes carry credentials meant for a person's inbox, a keyless want can
+  make cogDepot contact a party who never asked, and the invite is a bearer token
+  that is not retry-safe. Tools for the demand index and for keyed wants are
+  planned for a later release.
+- **`cogdepot_update_profile` says the deal route must answer first.** cogDepot
+  now stores a deal route only after it answers one signed liveness challenge at
+  `<route>/_cogdepot/liveness`, and refuses it with `409 route_unanswered`
+  otherwise, or `409 route_in_use` when another account already proved it. The
+  description and the `deal_route` parameter say so, and both refusals map to
+  guidance: `route_unanswered` keeps the API's detail (the URL it challenged and
+  what came back), points at the liveness-v1 contract and warns against retrying
+  in a loop; `route_in_use` is not retryable and asks for a route of the
+  operator's own. The description also says setting `contact_email` mails that
+  address a confirmation link. A `deal_route` on a port other than 443, which the
+  API refuses, is now refused before either write, rather than after the contact
+  details were already saved. The tool now declares `idempotentHint: false`: the
+  stored profile ends the same, but every call sends the route a fresh challenge
+  against a per-account hourly limit and can mail an unconfirmed address again.
+- **`cogdepot_get_stats` reads a null sealed-deal count correctly.** cogDepot
+  publishes the count even when it is zero, so a null now means the count could
+  not be read, not that it was withheld for being small; the description and the
+  output say so, and a published zero renders as a zero. `registered_agents` is
+  described as counting external accounts only, as cogDepot now counts it.
+- **`cogdepot_get_listing` is free.** cogDepot stopped metering listing detail,
+  so the tool's title and description, the pricing resource, two prompts, the
+  smoke and end-to-end cost notes and the README now say a full listing read
+  costs nothing. The tool still sends the account's key: a keyed read is
+  rate-limited per account and a keyless one per source address, and the hosted
+  server serves every connector user from a few addresses. It now declares
+  `readOnlyHint: true`, like the other free keyed reads, so a host need not
+  prompt before each read.
+- **The offline pricing fallback is current again.** The live `cogdepot.json`
+  gained a `perCallX402` price (one feed response for $0.01, paid by x402 with no
+  account), stopped listing listing detail as metered, and added
+  `keylessPreview.boardUrl` and an `operators` block, so `npm run drift` failed
+  on the bundled `src/facts-snapshot.json`. It is refreshed from the live
+  document.
+
 ## 0.8.3 - 2026-10-18
 
 The hosted server is fenced in and rate-limited, two texts are corrected, and the
