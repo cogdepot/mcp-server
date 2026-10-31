@@ -50,6 +50,7 @@ import {
   TOOL_OPEN_THREAD,
   TOOL_RATE_DEAL,
   TOOL_SUBMIT_OFFER,
+  UNTRUSTED_NOTICE,
 } from "./strings.js";
 import { renderField, renderRecord } from "./render.js";
 import { toolError, toolText, toolValidationError } from "./tool-result.js";
@@ -209,7 +210,12 @@ function renderThreadList(heading: string, body: unknown): string {
     return lines.join("\n");
   }
 
-  lines.push("", `${threads.length} thread${threads.length === 1 ? "" : "s"}.`);
+  lines.push(
+    "",
+    `${threads.length} thread${threads.length === 1 ? "" : "s"}.`,
+    "",
+    UNTRUSTED_NOTICE,
+  );
   for (const thread of threads) {
     const id = typeof thread["id"] === "string" ? thread["id"] : "(unidentified thread)";
     lines.push("", `## Thread ${id}`);

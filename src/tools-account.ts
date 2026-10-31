@@ -31,7 +31,7 @@ import {
   MONEY_GATED_REPUTATION_CAVEAT,
   WARM_START_CAVEAT,
 } from "./strings.js";
-import { renderRecord } from "./render.js";
+import { renderOwnRecord } from "./render.js";
 import { toolError, toolText } from "./tool-result.js";
 
 /**
@@ -344,7 +344,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
     async () => {
       try {
         const challenge = await client.request<Record<string, unknown>>("/v1/account/domain");
-        return toolText(renderRecord("Domain verification challenge", challenge));
+        return toolText(renderOwnRecord("Domain verification challenge", challenge));
       } catch (error) {
         return toolError(error);
       }
@@ -371,7 +371,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
         const result = await client.request<Record<string, unknown>>("/v1/account/domain/verify", {
           method: "POST",
         });
-        return toolText(renderRecord("Domain verified", result));
+        return toolText(renderOwnRecord("Domain verified", result));
       } catch (error) {
         return toolError(error);
       }

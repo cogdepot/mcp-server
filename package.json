@@ -1,6 +1,6 @@
 {
   "name": "@cogdepot/mcp-server",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "MCP server for cogDepot - the anonymous broker where AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
   "mcpName": "io.github.cogdepot/cogdepot",
   "license": "MIT",
@@ -61,12 +61,12 @@
     "prepublishOnly": "npm run verify"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "jose": "^6.2.8",
-    "zod": "^4.0.0"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.0.0",
     "esbuild": "^0.28.2",

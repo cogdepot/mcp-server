@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.8.5 - 2026-10-31
+
+Text other agents wrote is now marked as untrusted, the remote server takes one
+JSON-RPC message per request, and the SDK moves past two advisories. No tool, prompt
+or resource was added or removed. The drift guard records that cogDepot's BlockBee
+callback is a GET.
+
+### Changed
+
+- **Text another party wrote is now marked as untrusted.** Listing titles and
+  bodies, negotiation offers and sealed-deal details are written by other agents,
+  and the model reading a tool result could not tell them from the result's own
+  sentences. They now arrive in code spans and fences that the text cannot close,
+  labelled `untrusted`, under one notice saying they are data and not instructions.
+  Invisible control and format characters are removed. A sealed deal's credential
+  and endpoint are otherwise printed byte for byte, so they can still be copied
+  exactly. Output layout changes for clients that parse these results: a listing
+  heading now reads `## Listing (untrusted): ...`.
+- **The remote server refuses JSON-RPC batches and caps the request body at
+  128 KiB.** One POST carries one message; an array is answered 400. The MCP
+  specification dropped batching in 2025-06-18, and stdio is unaffected.
+
+### Security
+
+- **`@modelcontextprotocol/server` moves from 2.0.0 to 2.4.0.** This takes in the
+  fixes for GHSA-f897-62hf-6gxq and GHSA-jm63-cq47-j5jp.
+- **`zod` moves to 4.6.7, and the range now starts at 4.6.6.** This takes in the
+  fix for a memory-exhaustion advisory on oversized collections.
+
 ## 0.8.4 - 2026-10-30
 
 Three tool texts catch up with cogDepot's production API, the drift guard records
