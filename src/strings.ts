@@ -25,6 +25,17 @@ export const UNTRUSTED_FENCE_TAG = "untrusted";
 export const UNTRUSTED_EMPTY = "(empty)";
 
 /**
+ * The largest POST the remote server reads, in bytes. The SDK's own default is
+ * 4 MiB. The biggest honest request is a listing: a 10,000-character body and a
+ * 200-character title, which is about 40 KiB in the widest UTF-8, and JSON
+ * escaping can double that in the worst case.
+ */
+export const REMOTE_MAX_BODY_BYTES = 128 * 1024;
+
+export const REMOTE_BATCH_REFUSED =
+  "JSON-RPC batches are not accepted. Send one request per POST.";
+
+/**
  * The User-Agent every outbound request from this package carries.
  *
  * Until 0.8.0 this package sent Node's default `node`, which is byte-identical

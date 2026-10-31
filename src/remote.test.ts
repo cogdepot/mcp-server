@@ -2,13 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport, type AuthInfo, type McpHttpHandler } from "@modelcontextprotocol/server";
 
-import { apiKeyFromRequest, buildServerForRequest, createRemoteHandler, gateWithOAuth } from "./remote.js";
+import {
+  apiKeyFromRequest,
+  buildServerForRequest,
+  createRemoteHandler,
+  gateWithOAuth,
+  refuseBatches,
+} from "./remote.js";
 import { resetFactsCacheForTesting } from "./facts.js";
 import { resetApiBaseUrlForTesting } from "./config.js";
 import {
   OAUTH_AUTHORIZATION_SERVER_PATH,
   OAUTH_PROTECTED_RESOURCE_PATH,
   REMOTE_API_KEY_HEADER,
+  REMOTE_BATCH_REFUSED,
+  REMOTE_MAX_BODY_BYTES,
   TOOL_GET_ACCOUNT,
   TOOL_DISCOVER,
 } from "./strings.js";
@@ -169,6 +177,114 @@ describe("the handler", () => {
     const text = await response.text();
     expect(text).toContain("cogdepot");
     expect(text).toContain("2025-06-18");
+  });
+});
+
+describe("what the handler refuses to read", () => {
+  const post = (body: string) =>
+    new Request("http://localhost/", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body,
+    });
+
+  const initialize = (clientName: string) =>
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: clientName, version: "0" },
+      },
+    });
+
+  const toolCall = (id: number) => ({
+    jsonrpc: "2.0",
+    id,
+    method: "tools/call",
+    params: { name: TOOL_DISCOVER, arguments: {} },
+  });
+
+  async function expectBatchRefused(response: Response) {
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: REMOTE_BATCH_REFUSED },
+    });
+  }
+
+  it.each([
+    ["two tool calls", JSON.stringify([toolCall(1), toolCall(2)])],
+    ["one tool call", JSON.stringify([toolCall(1)])],
+    ["an empty array", "[]"],
+    ["an array behind whitespace", `\n\t  ${JSON.stringify([toolCall(1)])}`],
+  ])("refuses %s, and no tool runs", async (_, body) => {
+    const outbound = vi.mocked(globalThis.fetch);
+    outbound.mockClear();
+
+    await expectBatchRefused(await createRemoteHandler().fetch(post(body)));
+
+    expect(outbound).not.toHaveBeenCalled();
+  });
+
+  it("refuses a batch in OAuth mode too, from a caller with no token", async () => {
+    vi.stubEnv("COGDEPOT_OAUTH_ISSUER", "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_x");
+    vi.stubEnv("COGDEPOT_OAUTH_CLIENT_ID", "client");
+    vi.stubEnv("COGDEPOT_OAUTH_RESOURCE", "https://mcp.cogdepot.com/");
+    try {
+      await expectBatchRefused(
+        await createRemoteHandler().fetch(post(JSON.stringify([toolCall(1), toolCall(2)]))),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("leaves a request it does not read alone", async () => {
+    const seen: string[] = [];
+    const inner = {
+      fetch: async (request: Request) => {
+        seen.push(request.method);
+        return new Response(null, { status: 204 });
+      },
+    } as unknown as McpHttpHandler;
+
+    const response = await refuseBatches(inner).fetch(new Request("http://localhost/"));
+
+    expect(response.status).toBe(204);
+    expect(seen).toEqual(["GET"]);
+  });
+
+  it("hands the inner handler a body it can still read", async () => {
+    const response = await createRemoteHandler().fetch(post(initialize("remote-test")));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("cogdepot");
+  });
+
+  it("refuses a body over the limit before building a server", async () => {
+    const outbound = vi.mocked(globalThis.fetch);
+    outbound.mockClear();
+
+    const response = await createRemoteHandler().fetch(
+      post(initialize("x".repeat(REMOTE_MAX_BODY_BYTES))),
+    );
+
+    expect(response.status).toBe(413);
+    expect(outbound).not.toHaveBeenCalled();
+  });
+
+  it("still accepts the biggest honest request, a full listing", async () => {
+    // 10,000 four-byte characters, which is the widest a listing body can be.
+    const response = await createRemoteHandler().fetch(post(initialize("\u{1F600}".repeat(10_000))));
+
+    expect(response.status).toBe(200);
   });
 });
 

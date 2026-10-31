@@ -48,6 +48,8 @@ import {
   OAUTH_PROTECTED_RESOURCE_PATH,
   OAUTH_TOKEN_PATH,
   REMOTE_API_KEY_HEADER,
+  REMOTE_BATCH_REFUSED,
+  REMOTE_MAX_BODY_BYTES,
   REMOTE_USER_AGENT,
 } from "./strings.js";
 
@@ -113,7 +115,9 @@ export function createRemoteHandler(): McpHttpHandler {
 
   if (!oauth) {
     // OAuth not configured: the Phase 1 static-header transport, unchanged.
-    return createMcpHandler((ctx) => buildServerForRequest(ctx.requestInfo), HANDLER_OPTIONS);
+    return refuseBatches(
+      createMcpHandler((ctx) => buildServerForRequest(ctx.requestInfo), HANDLER_OPTIONS),
+    );
   }
 
   // OAuth configured: the credential comes only from the verified access token,
@@ -128,7 +132,42 @@ export function createRemoteHandler(): McpHttpHandler {
       ),
     HANDLER_OPTIONS,
   );
-  return gateWithOAuth(inner, oauth, createCognitoVerifier(oauth));
+  // Inside the gate, so the gate's own OAuth routes keep their form bodies, and a
+  // request with no token still reaches this check on its way to the keyless server.
+  return gateWithOAuth(refuseBatches(inner), oauth, createCognitoVerifier(oauth));
+}
+
+/**
+ * Refuses a JSON-RPC batch before the SDK reads it.
+ *
+ * The SDK runs every element of an array, and each tool call can make an outbound
+ * request, so one POST that the API Gateway throttle counts once could do the
+ * work of many. The SDK's own cap still allows 100 messages. This server has no
+ * use for any: the MCP specification dropped batching in 2025-06-18, and each tool
+ * call is one request here. Only an array is refused; a single message is
+ * untouched, and the first non-space character is enough because nothing else
+ * valid starts with `[`.
+ */
+export function refuseBatches(inner: McpHttpHandler): McpHttpHandler {
+  return {
+    ...inner,
+    fetch: async (request, options) => {
+      if (request.method === "POST") {
+        const body = await request.clone().text();
+        if (body.trimStart().startsWith("[")) {
+          return jsonResponse(
+            {
+              jsonrpc: "2.0",
+              id: null,
+              error: { code: JSON_RPC_INVALID_REQUEST, message: REMOTE_BATCH_REFUSED },
+            },
+            400,
+          );
+        }
+      }
+      return inner.fetch(request, options);
+    },
+  };
 }
 
 // Buffered JSON, never SSE. The Lambda + API Gateway deployment answers with a
@@ -136,7 +175,13 @@ export function createRemoteHandler(): McpHttpHandler {
 // must resolve to one JSON body rather than upgrading to an event stream. This is
 // lossless for this server: its tools return a single result and emit no mid-call
 // progress or logging notifications, which are the only thing 'json' mode drops.
-const HANDLER_OPTIONS = { responseMode: "json" } as const;
+const HANDLER_OPTIONS = {
+  responseMode: "json",
+  maxRequestBodySize: REMOTE_MAX_BODY_BYTES,
+} as const;
+
+/** The JSON-RPC 2.0 error code for a request that is not a valid request object. */
+const JSON_RPC_INVALID_REQUEST = -32600;
 
 /** The minimal verifier the gate needs; *createCognitoVerifier* satisfies it. */
 interface AccessTokenVerifier {

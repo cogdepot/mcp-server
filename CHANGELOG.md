@@ -13,6 +13,16 @@
   and endpoint are otherwise printed byte for byte, so they can still be copied
   exactly. Output layout changes for clients that parse these results: a listing
   heading now reads `## Listing (untrusted): ...`.
+- **The remote server refuses JSON-RPC batches and caps the request body at
+  128 KiB.** One POST carries one message; an array is answered 400. The MCP
+  specification dropped batching in 2025-06-18, and stdio is unaffected.
+
+### Security
+
+- **`@modelcontextprotocol/server` moves from 2.0.0 to 2.4.0.** This takes in the
+  fixes for GHSA-f897-62hf-6gxq and GHSA-jm63-cq47-j5jp.
+- **`zod` moves to 4.6.7, and the range now starts at 4.6.6.** This takes in the
+  fix for a memory-exhaustion advisory on oversized collections.
 
 ## 0.8.4 - 2026-10-30
 
