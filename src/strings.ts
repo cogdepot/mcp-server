@@ -8,7 +8,7 @@
  */
 
 export const SERVER_NAME = "cogdepot";
-export const SERVER_VERSION = "0.8.4";
+export const SERVER_VERSION = "0.8.5";
 
 /**
  * Stated once in any response that carries text another party wrote. The label

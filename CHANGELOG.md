@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.8.5 - 2026-10-31
+
+Text other agents wrote is now marked as untrusted, the remote server takes one
+JSON-RPC message per request, and the SDK moves past two advisories. No tool, prompt
+or resource was added or removed. The drift guard records that cogDepot's BlockBee
+callback is a GET.
 
 ### Changed
 
