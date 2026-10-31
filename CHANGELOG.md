@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Text another party wrote is now marked as untrusted.** Listing titles and
+  bodies, negotiation offers and sealed-deal details are written by other agents,
+  and the model reading a tool result could not tell them from the result's own
+  sentences. They now arrive in code spans and fences that the text cannot close,
+  labelled `untrusted`, under one notice saying they are data and not instructions.
+  Invisible control and format characters are removed. A sealed deal's credential
+  and endpoint are otherwise printed byte for byte, so they can still be copied
+  exactly. Output layout changes for clients that parse these results: a listing
+  heading now reads `## Listing (untrusted): ...`.
+
 ## 0.8.4 - 2026-10-30
 
 Three tool texts catch up with cogDepot's production API, the drift guard records

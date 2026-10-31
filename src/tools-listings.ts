@@ -35,7 +35,7 @@ import { newIdempotencyKey, type CogDepotClient } from "./client.js";
 import { isAllowedCogDepotHost } from "./config.js";
 import { ApiError } from "./errors.js";
 import { getFacts } from "./facts.js";
-import { renderField } from "./render.js";
+import { renderField, untrustedBlock, untrustedInline } from "./render.js";
 import { formatCredits, microToUsd, toMicroUsd, MICRO_USD_PER_CREDIT } from "./money.js";
 import {
   DEFAULT_PREVIEW_URL,
@@ -58,6 +58,7 @@ import {
   TOOL_GET_MY_LISTINGS,
   TOOL_POST_LISTING,
   TOOL_PREVIEW_LISTINGS,
+  UNTRUSTED_NOTICE,
   USER_AGENT,
 } from "./strings.js";
 import { toolError, toolText } from "./tool-result.js";
@@ -325,7 +326,7 @@ function renderOneListing(
   const lines = [renderListings([rest], heading, false)];
 
   const description = text(body);
-  if (description) lines.push("", "## Description", description);
+  if (description) lines.push("", "## Description (untrusted)", untrustedBlock(description));
 
   return lines.join("\n");
 }
@@ -482,10 +483,15 @@ export function renderListings(
     return lines.join("\n");
   }
 
-  lines.push("", `${listings.length} listing${listings.length === 1 ? "" : "s"}.`);
+  lines.push(
+    "",
+    `${listings.length} listing${listings.length === 1 ? "" : "s"}.`,
+    "",
+    UNTRUSTED_NOTICE,
+  );
 
   for (const listing of listings) {
-    lines.push("", `## ${describeListing(listing)}`);
+    lines.push("", `## Listing (untrusted): ${untrustedInline(describeListing(listing))}`);
 
     for (const key of HEADLINE_FIELDS) {
       const value = listing[key];
@@ -522,7 +528,10 @@ export function renderListings(
   return lines.join("\n");
 }
 
-/** The heading line: what this listing is, in the words the poster used. */
+/**
+ * The heading line: what this listing is, in the words the poster used. Every
+ * part of it is the poster's, so the caller prints it through `untrustedInline`.
+ */
 function describeListing(listing: Record<string, unknown>): string {
   const title = text(listing["title"]) ?? "(untitled listing)";
   const facets = [text(listing["listing_type"]), text(listing["category"])].filter(Boolean);
