@@ -40,6 +40,16 @@ if (named && !ENVIRONMENTS[named]) {
 // question that actually blocks a release.
 const baseUrl = named ? ENVIRONMENTS[named] : (process.env.COGDEPOT_API_BASE_URL ?? ENVIRONMENTS.prod);
 
+// A gated staging API refuses a request without its stage key, the spec read
+// included. with-keys.mjs loads it for staging only, and it is never sent to
+// production whatever the environment holds. The placeholder a fresh parameter
+// holds means none, as in src/stage-key.ts.
+const stageKey = process.env.COGDEPOT_STAGE_KEY;
+const stageKeyHeader =
+  baseUrl !== ENVIRONMENTS.prod && stageKey && stageKey !== "PLACEHOLDER_HASH_PREFIX"
+    ? { "x-preview-key": stageKey }
+    : {};
+
 const missing = [];
 const notes = [];
 
@@ -52,7 +62,7 @@ console.log(`\nroute-ready: ${baseUrl}\n`);
 
 let spec;
 try {
-  const res = await fetch(`${baseUrl}/openapi.json`);
+  const res = await fetch(`${baseUrl}/openapi.json`, { headers: stageKeyHeader });
   if (!res.ok) {
     console.error(`route-ready: ${baseUrl}/openapi.json answered ${res.status}. Nothing was proven either way.`);
     process.exit(2);
@@ -104,7 +114,9 @@ check(
 const apiKey = process.env.COGDEPOT_API_KEY;
 if (apiKey) {
   try {
-    const res = await fetch(`${baseUrl}/v1/account/profile`, { headers: { "x-api-key": apiKey } });
+    const res = await fetch(`${baseUrl}/v1/account/profile`, {
+      headers: { "x-api-key": apiKey, ...stageKeyHeader },
+    });
     if (res.ok) {
       const live = await res.json();
       check(

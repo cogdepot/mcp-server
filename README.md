@@ -78,6 +78,7 @@ asks" does not work here either.
 |---|---|---|
 | `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the three discovery tools; the account tools are not advertised at all, rather than offered and then failing |
 | `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
+| `COGDEPOT_STAGE_KEY` | no | The stage key of a gated non-production deployment. Sent as `x-preview-key` on every request to that deployment's API and storefront, the keyless ones included, because the gate refuses requests without it. Never sent to production's hosts or outside `cogdepot.com`, and **refused at startup unless `COGDEPOT_API_BASE_URL` points somewhere other than production**. Trailing newlines are dropped; empty or `PLACEHOLDER_HASH_PREFIX` means no key |
 
 The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`npm run serve:remote`), and only when it runs behind per-user OAuth rather than the static-header key. They are set on the deployment, never in a stdio client config. Set all of the issuer, client id and resource together, or none - a half-set config is refused at startup. Unset (the default), the remote server stays on the static-header model and the stdio server ignores them entirely.
 
@@ -87,6 +88,14 @@ The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`
 | `COGDEPOT_OAUTH_CLIENT_ID` | no | The app-client id a presented token's `client_id` claim must equal - the binding that stands in for the absent `aud` on a Cognito access token |
 | `COGDEPOT_OAUTH_RESOURCE` | no | This server's own resource identifier, published in the protected-resource-metadata document a `401` points clients at. https only |
 | `COGDEPOT_OAUTH_SCOPES` | no | Space- or comma-separated scopes advertised as available, e.g. `cogdepot/read cogdepot/trade:finalize`. Advertised only; cogDepot itself is the authority on which scope each action requires |
+
+The hosted server does not take `COGDEPOT_STAGE_KEY` as a value. It takes
+`COGDEPOT_STAGE_KEY_PARAM`, the **name** of the SSM parameter holding the key,
+and reads it before serving its first request, so the key never sits in the
+function's configuration. The template sets it on staging only, to
+`/cogdepot/staging/STAGING_URL_PREFIX`. A failed read fails that request and is
+retried on the next one, rather than serving without the key. Production leaves it
+empty and reads nothing.
 
 ## Tools
 
@@ -408,6 +417,16 @@ create/delete/tag/retention on the access-log group ARN plus those two, matching
 the main API stack role, before shipping a template that adds an access log.
 Staging fails first, so production is never reached on this failure.
 
+**The staging function attaches a policy that `iam_mcp.tf` owns.** Staging reads
+its stage key from SSM (see [Environment variables](#environment-variables)), so
+the template attaches the customer-managed policy
+`cogdepot-mcp-staging-stage-key-read` to the staging function's role. That policy
+must exist, the function's permissions boundary must allow what it grants, and the
+staging deploy role must be allowed to attach it (its `iam:PolicyARN` condition
+admits only named policies) before the first release that carries this template.
+Otherwise the role update is denied and the staging deploy rolls back.
+Production attaches nothing and its role is unchanged.
+
 **To deploy by hand** - a first-time stack, or a release whose deploy job failed
 - the same three steps run locally. Check what is live first:
 
@@ -567,9 +586,10 @@ Parameters follow the convention already used by cogDepot's Terraform,
 
 | Parameter | Used by |
 |---|---|
-| `/cogdepot/staging/mcp/api_key` | `smoke:staging`, `verify:route:staging` |
+| `/cogdepot/staging/mcp/api_key` | `smoke:staging`, `verify:route:staging`, `route-ready` on staging |
 | `/cogdepot/staging/mcp/e2e_poster_key` | `e2e:staging`, posts and seals |
 | `/cogdepot/staging/mcp/e2e_negotiator_key` | `e2e:staging`, opens and offers |
+| `/cogdepot/staging/STAGING_URL_PREFIX` | every staging command, as `COGDEPOT_STAGE_KEY`; also read by the hosted staging server. The staging deployment's own key, not an account's, and not created by hand here |
 | `/cogdepot/production/mcp/review_account_api_key` | `smoke:prod`, `route-ready` on prod (the pre-existing directory review account) |
 
 The exact parameter names are declared per environment in `scripts/with-keys.mjs`

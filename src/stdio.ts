@@ -14,6 +14,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
 import { buildServer } from "./core.js";
+import { setStageKey } from "./stage-key.js";
 
 async function main(): Promise<void> {
   // Resolved before anything else so an invalid override stops the process
@@ -21,6 +22,8 @@ async function main(): Promise<void> {
   // intending to test would otherwise spend real credits believing they were
   // pointed somewhere safe.
   setApiBaseUrl(resolveApiBaseUrl(process.env["COGDEPOT_API_BASE_URL"]));
+  // After the base URL, because it refuses a stage key aimed at production.
+  setStageKey(process.env["COGDEPOT_STAGE_KEY"]);
 
   const server = buildServer(process.env["COGDEPOT_API_KEY"]);
   await server.connect(new StdioServerTransport());

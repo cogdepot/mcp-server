@@ -34,17 +34,30 @@ const ENVIRONMENTS = {
     // The e2e seals a real deal, so it is offered on staging only. The script
     // itself refuses production independently; this is the outer of two gates.
     allowsE2e: true,
+    // Every staging command also loads the stage key: the staging API and
+    // storefront can refuse any request without it, the keyless ones included.
+    // It is the deployment's key, not an account's, and production has none.
     params: {
-      smoke: { "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY" },
+      smoke: {
+        "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY",
+        "/cogdepot/staging/STAGING_URL_PREFIX": "COGDEPOT_STAGE_KEY",
+      },
       // Writes to the account this key owns, so it is offered on staging only.
       // verify-route.mjs refuses production independently; this is the outer of
       // the two gates, the same arrangement e2e already has.
-      "verify:route": { "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY" },
+      "verify:route": {
+        "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY",
+        "/cogdepot/staging/STAGING_URL_PREFIX": "COGDEPOT_STAGE_KEY",
+      },
       // Read-only, so it is offered on production too - see the prod block.
-      "route-ready": { "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY" },
+      "route-ready": {
+        "/cogdepot/staging/mcp/api_key": "COGDEPOT_API_KEY",
+        "/cogdepot/staging/STAGING_URL_PREFIX": "COGDEPOT_STAGE_KEY",
+      },
       e2e: {
         "/cogdepot/staging/mcp/e2e_poster_key": "COGDEPOT_E2E_POSTER_KEY",
         "/cogdepot/staging/mcp/e2e_negotiator_key": "COGDEPOT_E2E_NEGOTIATOR_KEY",
+        "/cogdepot/staging/STAGING_URL_PREFIX": "COGDEPOT_STAGE_KEY",
       },
     },
   },

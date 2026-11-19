@@ -78,6 +78,19 @@ export const SITE_URL = "https://cogdepot.com";
 export const REMOTE_API_KEY_HEADER = "x-cogdepot-api-key";
 
 /**
+ * The header a gated non-production deployment reads its stage key from. See
+ * stage-key.ts.
+ */
+export const STAGE_KEY_HEADER = "x-preview-key";
+
+/**
+ * The value a stage-key parameter holds before anyone fills it in. It means no
+ * key, the same as an empty value, so a deployment whose parameter is still the
+ * placeholder sends nothing.
+ */
+export const STAGE_KEY_PLACEHOLDER = "PLACEHOLDER_HASH_PREFIX";
+
+/**
  * The RFC 9728 protected-resource-metadata path.
  *
  * When the remote server runs with OAuth configured, a GET here returns the

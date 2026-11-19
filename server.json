@@ -32,6 +32,13 @@
           "format": "string"
         },
         {
+          "name": "COGDEPOT_STAGE_KEY",
+          "description": "Optional. The stage key of a gated non-production deployment, sent as x-preview-key on every request to it. Refused unless COGDEPOT_API_BASE_URL points somewhere other than production; never sent to production's hosts.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
           "name": "COGDEPOT_OAUTH_ISSUER",
           "description": "Remote HTTP server only. The Cognito user-pool issuer whose access tokens are accepted, e.g. https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXX. Set together with the client id and resource, or none. Ignored by the stdio server.",
           "isRequired": false,
@@ -55,6 +62,13 @@
         {
           "name": "COGDEPOT_OAUTH_SCOPES",
           "description": "Remote HTTP server only. Space- or comma-separated scopes advertised as available, e.g. cogdepot/read cogdepot/trade:finalize. Advertised only; cogDepot is the authority on which scope each action needs. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_STAGE_KEY_PARAM",
+          "description": "Hosted remote server only. The name of the SSM parameter holding COGDEPOT_STAGE_KEY's value, read before the first request so the key stays out of the function's configuration. Ignored by the stdio server.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"

@@ -122,6 +122,9 @@ const transport = new StdioClientTransport({
     ...(process.env.COGDEPOT_API_BASE_URL
       ? { COGDEPOT_API_BASE_URL: process.env.COGDEPOT_API_BASE_URL }
       : {}),
+    // A gated staging deployment refuses the keyless calls too, so the stage
+    // key with-keys.mjs loads has to reach the server. Production loads none.
+    ...(process.env.COGDEPOT_STAGE_KEY ? { COGDEPOT_STAGE_KEY: process.env.COGDEPOT_STAGE_KEY } : {}),
   },
 });
 

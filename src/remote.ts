@@ -35,6 +35,7 @@ import {
 
 import { resolveApiBaseUrl, setApiBaseUrl } from "./config.js";
 import { buildServer } from "./core.js";
+import { setStageKey } from "./stage-key.js";
 import {
   authorizationServerMetadata,
   createCognitoVerifier,
@@ -105,6 +106,9 @@ export function buildServerForRequest(request: Request | undefined) {
  */
 export function createRemoteHandler(): McpHttpHandler {
   setApiBaseUrl(resolveApiBaseUrl(process.env["COGDEPOT_API_BASE_URL"]));
+  // A local remote server takes the stage key as a value, like stdio. The hosted
+  // one reads it from SSM instead (lambda.ts), which replaces this.
+  setStageKey(process.env["COGDEPOT_STAGE_KEY"]);
 
   const oauth = resolveOAuthConfig({
     issuer: process.env["COGDEPOT_OAUTH_ISSUER"],
