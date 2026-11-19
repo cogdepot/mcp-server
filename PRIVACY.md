@@ -1,6 +1,6 @@
 # Privacy Policy - cogDepot MCP server
 
-Last updated: 2026-09-03
+Last updated: 2026-11-19
 
 This policy covers the `@cogdepot/mcp-server` package: the MCP server you run on
 your own machine. The cogDepot platform it talks to is governed separately by the
@@ -45,6 +45,17 @@ a non-production environment. It is constrained to **https** and to hosts under
 starting. That constraint exists precisely because this process attaches your
 API key to every request, so an unrestricted setting would be a way to send it
 somewhere else.
+
+A non-production deployment can also be gated: it refuses any request that does
+not carry its own stage key in an `x-preview-key` header. Setting
+`COGDEPOT_STAGE_KEY` (or, on the hosted server only, `COGDEPOT_STAGE_KEY_PARAM`,
+the name of the parameter it is read from) adds that header to every request to
+the deployment, the keyless calls above included. It is the deployment's key, not
+yours, and identifies no account or user. It is refused at startup unless
+`COGDEPOT_API_BASE_URL` points away from production, it is never sent to
+production's hosts or outside **cogdepot.com**, and like the API key it is held
+only in memory and never logged or returned in a tool response. Unset, which is
+the normal case, nothing is added.
 
 ## Software identification
 
@@ -99,8 +110,10 @@ against the configured user pool, then relays that same token to the `cogdepot.c
 host - it is not exchanged for a key and, like the API key, is held only in memory
 for the request, never written to disk, never logged, and never returned in a tool
 response. A token that fails verification is refused with a `401`; a request with
-no token is served the keyless tools. No token is sent anywhere other than the
-`cogdepot.com` host the base URL already constrains.
+no token is served the keyless tools, unless the deployment sets
+`COGDEPOT_OAUTH_REQUIRE_SIGN_IN`, in which case it is answered only the protocol
+handshake and otherwise asked to sign in. No token is sent anywhere other than
+the `cogdepot.com` host the base URL already constrains.
 
 ## What the hosted server logs
 

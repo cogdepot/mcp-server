@@ -111,7 +111,13 @@ async function connect(label, apiKey) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: ["dist/stdio.js"],
-    env: { PATH: process.env.PATH ?? "", COGDEPOT_API_KEY: apiKey, COGDEPOT_API_BASE_URL: baseUrl },
+    env: {
+      PATH: process.env.PATH ?? "",
+      COGDEPOT_API_KEY: apiKey,
+      COGDEPOT_API_BASE_URL: baseUrl,
+      // The gated staging deployment's stage key, loaded by with-keys.mjs.
+      ...(process.env.COGDEPOT_STAGE_KEY ? { COGDEPOT_STAGE_KEY: process.env.COGDEPOT_STAGE_KEY } : {}),
+    },
   });
   const client = new Client({ name: `e2e-${label}`, version: "0.0.0" });
   await client.connect(transport);

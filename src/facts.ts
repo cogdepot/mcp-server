@@ -15,6 +15,7 @@
 
 import snapshot from "./facts-snapshot.json" with { type: "json" };
 import { getDiscoveryUrl } from "./config.js";
+import { stageKeyHeaders } from "./stage-key.js";
 import { FACTS_TTL_MS, FACTS_FETCH_TIMEOUT_MS, USER_AGENT } from "./strings.js";
 
 /**
@@ -122,7 +123,11 @@ export async function getFacts(now: () => number = Date.now): Promise<FactsResul
 async function fetchFacts(): Promise<CogDepotFacts> {
   const response = await fetch(getDiscoveryUrl(), {
     signal: AbortSignal.timeout(FACTS_FETCH_TIMEOUT_MS),
-    headers: { accept: "application/json", "user-agent": USER_AGENT },
+    headers: {
+      accept: "application/json",
+      "user-agent": USER_AGENT,
+      ...stageKeyHeaders(getDiscoveryUrl()),
+    },
   });
 
   if (!response.ok) {

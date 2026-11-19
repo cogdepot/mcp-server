@@ -35,6 +35,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
 import { getApiBaseUrl } from "./config.js";
+import { stageKeyHeaders } from "./stage-key.js";
 import { ApiError } from "./errors.js";
 import {
   DESCRIPTION_GET_STATS,
@@ -179,14 +180,17 @@ export function renderStats(raw: Record<string, unknown>, now: number = Date.now
   return lines.join("\n");
 }
 
-/** Fetches the public aggregate. No credentials are attached, by design. */
+/**
+ * Fetches the public aggregate. No account credential is attached, by design;
+ * a gated non-production API still gets its stage key.
+ */
 async function fetchStats(userAgent: string = USER_AGENT): Promise<Record<string, unknown>> {
   const url = `${getApiBaseUrl()}/stats.json`;
 
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { accept: "application/json", "user-agent": userAgent },
+      headers: { accept: "application/json", "user-agent": userAgent, ...stageKeyHeaders(url) },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {

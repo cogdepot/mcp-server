@@ -33,6 +33,7 @@ import * as z from "zod/v4";
 
 import { newIdempotencyKey, type CogDepotClient } from "./client.js";
 import { isAllowedCogDepotHost } from "./config.js";
+import { stageKeyHeaders } from "./stage-key.js";
 import { ApiError } from "./errors.js";
 import { getFacts } from "./facts.js";
 import { renderField, untrustedBlock, untrustedInline } from "./render.js";
@@ -384,7 +385,10 @@ async function resolvePreviewUrl(): Promise<string> {
   return stated;
 }
 
-/** Fetches the keyless preview. No credentials are attached, by design. */
+/**
+ * Fetches the keyless preview. No account credential is attached, by design;
+ * a gated non-production storefront still gets its stage key.
+ */
 async function fetchPreview(
   url: string,
   userAgent: string = USER_AGENT,
@@ -392,7 +396,7 @@ async function fetchPreview(
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { accept: "application/json", "user-agent": userAgent },
+      headers: { accept: "application/json", "user-agent": userAgent, ...stageKeyHeaders(url) },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {

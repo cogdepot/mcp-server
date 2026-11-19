@@ -222,6 +222,16 @@ Resources:
       # AccessDenied and the rollback, denied DeleteFunctionConcurrency, leaves
       # the stack in UPDATE_ROLLBACK_FAILED until an admin recovers it.
       ReservedConcurrentExecutions: 50
+      # Staging only: the read of the stage key below. The policy, like the
+      # boundary above, is cogDepot's Terraform (iam_mcp.tf), which must also let
+      # the deploy role attach it - apply that first, or the role update is
+      # denied and the deploy rolls back. Production gets nothing here, so its
+      # role is unchanged. SAM adds the basic execution role on its own.
+      Policies:
+        - !If
+          - IsProduction
+          - !Ref AWS::NoValue
+          - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/cogdepot-mcp-${Stage}-stage-key-read
       CodeUri: ../../lambda-dist
       Handler: index.handler
       Environment:
@@ -234,6 +244,23 @@ Resources:
           COGDEPOT_OAUTH_CLIENT_ID: !Ref OAuthClientId
           COGDEPOT_OAUTH_RESOURCE: !Ref OAuthResource
           COGDEPOT_OAUTH_SCOPES: !Ref OAuthScopes
+          # The NAME of the SSM parameter holding the stage key that the staging
+          # API and storefront gate on, never the key: a value here would be
+          # readable by anyone who can read the function. Empty in production,
+          # which has no such gate, and then the server sends no key.
+          COGDEPOT_STAGE_KEY_PARAM: !If
+            - IsProduction
+            - ""
+            - !Sub /cogdepot/${Stage}/STAGING_URL_PREFIX
+          # Staging holds the stage key and sends it on every call, so it must
+          # not serve anonymous callers: without a verified token only the
+          # handshake answers (the deploy's version check needs no more), and
+          # everything else gets a sign-in challenge. Production keeps the
+          # zero-configuration keyless tools.
+          COGDEPOT_OAUTH_REQUIRE_SIGN_IN: !If
+            - IsProduction
+            - "false"
+            - "true"
       Events:
         Root:
           Type: HttpApi

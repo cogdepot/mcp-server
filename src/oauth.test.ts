@@ -36,6 +36,7 @@ const CONFIG: OAuthConfig = {
   clientId: CLIENT_ID,
   resource: "https://mcp.cogdepot.com/",
   scopes: ["cogdepot/read", "cogdepot/trade:negotiate"],
+  requireSignIn: false,
 };
 
 let privateKey: CryptoKey;

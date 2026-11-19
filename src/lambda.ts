@@ -17,11 +17,19 @@
 import { Buffer } from "node:buffer";
 
 import { createRemoteHandler } from "./remote.js";
+import { stageKeyLoader } from "./stage-key-ssm.js";
 
 // Built once per container. A misconfigured deploy - a bad base URL, a half-set
 // OAuth config - throws here and fails the cold start, rather than serving a
 // broken server; the same fail-fast the base-URL and OAuth checks already make.
 const remoteHandler = createRemoteHandler();
+
+// The stage key of a gated non-production deployment, read from the SSM
+// parameter this variable names. Unset in production, where it does nothing.
+// Read before the first request is served rather than at module load, because
+// the bundle is CommonJS and has no top-level await; a failed read fails that
+// request and is retried on the next.
+const ensureStageKey = stageKeyLoader(process.env["COGDEPOT_STAGE_KEY_PARAM"]);
 
 /** The subset of the API Gateway v2 (HTTP API) proxy event this adapter reads. */
 interface ApiGatewayV2Event {
@@ -46,6 +54,7 @@ interface ApiGatewayV2Result {
 }
 
 export async function handler(event: ApiGatewayV2Event): Promise<ApiGatewayV2Result> {
+  await ensureStageKey();
   const request = toRequest(event);
   const response = await remoteHandler.fetch(request);
   const result = await toResult(response);

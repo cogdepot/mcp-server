@@ -10,6 +10,7 @@
 import { ApiError, asProblem, describeProblem } from "./errors.js";
 import { getFacts } from "./facts.js";
 import { getApiBaseUrl } from "./config.js";
+import { stageKeyHeaders } from "./stage-key.js";
 import { REQUEST_TIMEOUT_MS, USER_AGENT } from "./strings.js";
 
 /**
@@ -146,10 +147,14 @@ export class CogDepotClient {
     }
     if (options.body !== undefined) headers["content-type"] = "application/json";
     if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+    const url = `${this.#baseUrl}${path}`;
+    // A gated non-production deployment refuses a request without its stage key,
+    // whatever account credential the request carries.
+    Object.assign(headers, stageKeyHeaders(url));
 
     let response: Response;
     try {
-      response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      response = await this.#fetch(url, {
         method,
         headers,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

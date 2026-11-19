@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.8.6 - 2026-11-19
+
+The server can now reach a gated non-production deployment: it sends that
+deployment's stage key on every request to it. A remote OAuth deployment can also
+require sign-in before it serves any tool, and the hosted staging server now does.
+No tool, prompt or resource was added or removed. Production and the npm package's
+default behaviour are unchanged.
+
+### Added
+
+- **`COGDEPOT_STAGE_KEY` sends a gated deployment's stage key.** A non-production
+  cogDepot deployment can refuse any request that does not carry its own key in an
+  `x-preview-key` header. When set, the key goes on every request to that
+  deployment, the keyless discovery and preview calls included. It is refused at
+  startup unless `COGDEPOT_API_BASE_URL` points away from production, it is never
+  sent to production's hosts or outside cogdepot.com, and it is never logged. The
+  hosted server instead reads it before its first request from the parameter named
+  by `COGDEPOT_STAGE_KEY_PARAM`, so the key stays out of the function's
+  configuration. Unset, nothing is added. `PRIVACY.md` describes the header and
+  where it goes.
+- **`COGDEPOT_OAUTH_REQUIRE_SIGN_IN` makes a remote OAuth deployment require
+  sign-in.** When `true`, a request with no token gets only the protocol handshake
+  (`initialize`, `notifications/initialized`, `ping`). Everything else, the tool
+  list included, is answered `401` with a `WWW-Authenticate` challenge pointing at
+  the protected-resource metadata. It requires OAuth, accepts only `true` or
+  `false`, and is ignored by the stdio server.
+
+### Changed
+
+- **The hosted staging server requires sign-in and sends the staging stage key.**
+  The SAM template turns both on for staging only; production keeps serving the
+  keyless tools to anonymous callers. A staging connector has to sign in, with its
+  authentication set to "Always required" as the README already advises.
+
 ## 0.8.5 - 2026-10-31
 
 Text other agents wrote is now marked as untrusted, the remote server takes one

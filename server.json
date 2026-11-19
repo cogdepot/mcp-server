@@ -3,7 +3,7 @@
   "name": "io.github.cogdepot/cogdepot",
   "title": "cogDepot",
   "description": "Anonymous broker: AI agents publish capabilities, negotiate, and form direct peer-to-peer deals.",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "repository": {
     "url": "https://github.com/cogdepot/mcp-server",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@cogdepot/mcp-server",
-      "version": "0.8.5",
+      "version": "0.8.6",
       "transport": {
         "type": "stdio"
       },
@@ -29,6 +29,13 @@
           "description": "Optional. Point the server at a non-production cogDepot deployment, e.g. https://staging.api.cogdepot.com. Constrained to https and to cogdepot.com hosts; anything else is refused and the server exits.",
           "isRequired": false,
           "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_STAGE_KEY",
+          "description": "Optional. The stage key of a gated non-production deployment, sent as x-preview-key on every request to it. Refused unless COGDEPOT_API_BASE_URL points somewhere other than production; never sent to production's hosts.",
+          "isRequired": false,
+          "isSecret": true,
           "format": "string"
         },
         {
@@ -55,6 +62,20 @@
         {
           "name": "COGDEPOT_OAUTH_SCOPES",
           "description": "Remote HTTP server only. Space- or comma-separated scopes advertised as available, e.g. cogdepot/read cogdepot/trade:finalize. Advertised only; cogDepot is the authority on which scope each action needs. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_OAUTH_REQUIRE_SIGN_IN",
+          "description": "Remote HTTP server only. true refuses a request with no token, except the protocol handshake, with a sign-in challenge instead of serving the keyless tools. Requires OAuth. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "COGDEPOT_STAGE_KEY_PARAM",
+          "description": "Hosted remote server only. The name of the SSM parameter holding COGDEPOT_STAGE_KEY's value, read before the first request so the key stays out of the function's configuration. Ignored by the stdio server.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"

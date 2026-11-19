@@ -30,6 +30,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
 import { getApiBaseUrl } from "./config.js";
+import { stageKeyHeaders } from "./stage-key.js";
 import { ApiError } from "./errors.js";
 import {
   DESCRIPTION_GET_REPUTATION,
@@ -133,7 +134,10 @@ function renderReputation(handle: string, body: Record<string, unknown>): string
   return lines.join("\n");
 }
 
-/** Fetches the public record. No credentials are attached, by design. */
+/**
+ * Fetches the public record. No account credential is attached, by design;
+ * a gated non-production API still gets its stage key.
+ */
 async function fetchReputation(
   handle: string,
   userAgent: string = USER_AGENT,
@@ -143,7 +147,7 @@ async function fetchReputation(
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: { accept: "application/json", "user-agent": userAgent },
+      headers: { accept: "application/json", "user-agent": userAgent, ...stageKeyHeaders(url) },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {

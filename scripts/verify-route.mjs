@@ -41,6 +41,13 @@ if (/^https:\/\/(api\.)?cogdepot\.com/.test(baseUrl)) {
   process.exit(1);
 }
 
+// The gated staging deployment's stage key, loaded by with-keys.mjs. It goes to
+// the spawned server and on this script's own calls straight at the API. The
+// placeholder a fresh parameter holds means none, as in src/stage-key.ts.
+const stageKey = process.env.COGDEPOT_STAGE_KEY;
+const stageKeyHeader =
+  stageKey && stageKey !== "PLACEHOLDER_HASH_PREFIX" ? { "x-preview-key": stageKey } : {};
+
 const BINDING = "HTTP+JSON";
 const CARD = "https://verify.example/.well-known/agent-card.json";
 
@@ -53,7 +60,12 @@ function check(ok, message) {
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: ["dist/stdio.js"],
-  env: { PATH: process.env.PATH ?? "", COGDEPOT_API_KEY: apiKey, COGDEPOT_API_BASE_URL: baseUrl },
+  env: {
+    PATH: process.env.PATH ?? "",
+    COGDEPOT_API_KEY: apiKey,
+    COGDEPOT_API_BASE_URL: baseUrl,
+    ...(stageKey ? { COGDEPOT_STAGE_KEY: stageKey } : {}),
+  },
 });
 const client = new Client({ name: "verify-route", version: "0.0.0" });
 await client.connect(transport);
@@ -66,7 +78,9 @@ async function callText(name, args = {}) {
 
 /** Reads the profile straight from the API, which is the side under test. */
 async function profile() {
-  const res = await fetch(`${baseUrl}/v1/account/profile`, { headers: { "x-api-key": apiKey } });
+  const res = await fetch(`${baseUrl}/v1/account/profile`, {
+    headers: { "x-api-key": apiKey, ...stageKeyHeader },
+  });
   if (!res.ok) throw new Error(`GET /v1/account/profile answered ${res.status}`);
   return res.json();
 }
@@ -143,7 +157,7 @@ console.log("\n  the API's own view of the rules:");
 async function putRoute(body) {
   const res = await fetch(`${baseUrl}/v1/account/route`, {
     method: "PUT",
-    headers: { "x-api-key": apiKey, "content-type": "application/json" },
+    headers: { "x-api-key": apiKey, "content-type": "application/json", ...stageKeyHeader },
     body: JSON.stringify({ deal_route: before.deal_route, ...body }),
   });
   let reason;

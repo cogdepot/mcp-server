@@ -179,6 +179,16 @@ const EXCLUDED = {
     "Not agent-facing: nothing in it a model finding or making a deal could act on.",
   "GET /.well-known/agent-card.json": "Discovery document, summarised by cogdepot_discover.",
   "GET /.well-known/ai-catalog.json": "Discovery document, not separately useful to a model.",
+  "GET /.well-known/ai-plugin.json":
+    "Plugin manifest in a retired format, for directories and older crawlers. It only " +
+    "points at the OpenAPI spec; nothing in it a model could act on.",
+  "GET /.well-known/api-catalog":
+    "RFC 9727 linkset naming the API's documents by role, for a client that knows only " +
+    "the host. Discovery plumbing, not separately useful to a model.",
+  "GET /.well-known/mcp/server-card.json":
+    "Tells a client where this MCP server is and how to install it. A model already " +
+    "talking to the server has no use for it.",
+  "GET /apis.json": "APIs.json index for API directories and crawlers, not agent-facing.",
   "GET /.well-known/cogdepot.json": "Read directly as the live-facts source.",
   "GET /.well-known/x402": "Crypto payment manifest. Deliberately never surfaced.",
   "GET /.well-known/security.txt": "Security-contact file (RFC 9116), not agent-facing.",
