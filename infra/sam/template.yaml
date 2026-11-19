@@ -252,6 +252,15 @@ Resources:
             - IsProduction
             - ""
             - !Sub /cogdepot/${Stage}/STAGING_URL_PREFIX
+          # Staging holds the stage key and sends it on every call, so it must
+          # not serve anonymous callers: without a verified token only the
+          # handshake answers (the deploy's version check needs no more), and
+          # everything else gets a sign-in challenge. Production keeps the
+          # zero-configuration keyless tools.
+          COGDEPOT_OAUTH_REQUIRE_SIGN_IN: !If
+            - IsProduction
+            - "false"
+            - "true"
       Events:
         Root:
           Type: HttpApi

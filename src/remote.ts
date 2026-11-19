@@ -20,7 +20,9 @@
  *   bearer, which its own scope middleware re-verifies and maps to an account.
  *   A request with NO token still gets the keyless server, so the zero-config
  *   discovery promise holds in this mode too - only a bad token is refused, and
- *   the keyed tools simply require a good one.
+ *   the keyed tools simply require a good one. A deployment that must not be
+ *   usable anonymously sets COGDEPOT_OAUTH_REQUIRE_SIGN_IN, and then a request
+ *   with no token gets only the handshake (see gateWithOAuth).
  *
  * This is transport glue, not a deployment: adapting the returned handler to a
  * Lambda event or a Node server is a deploy concern (see scripts/serve-remote).
@@ -39,6 +41,7 @@ import { setStageKey } from "./stage-key.js";
 import {
   authorizationServerMetadata,
   createCognitoVerifier,
+  parseRequireSignIn,
   protectedResourceMetadata,
   resolveOAuthConfig,
   type OAuthConfig,
@@ -51,6 +54,7 @@ import {
   REMOTE_API_KEY_HEADER,
   REMOTE_BATCH_REFUSED,
   REMOTE_MAX_BODY_BYTES,
+  REMOTE_SIGN_IN_REQUIRED,
   REMOTE_USER_AGENT,
 } from "./strings.js";
 
@@ -115,6 +119,7 @@ export function createRemoteHandler(): McpHttpHandler {
     clientId: process.env["COGDEPOT_OAUTH_CLIENT_ID"],
     resource: process.env["COGDEPOT_OAUTH_RESOURCE"],
     scopes: parseScopeList(process.env["COGDEPOT_OAUTH_SCOPES"]),
+    requireSignIn: parseRequireSignIn(process.env["COGDEPOT_OAUTH_REQUIRE_SIGN_IN"]),
   });
 
   if (!oauth) {
@@ -201,7 +206,9 @@ interface AccessTokenVerifier {
  *    document, so a client can find the authorization server;
  *  - a request that presents NO bearer is passed straight through with no
  *    authInfo - the inner factory builds the keyless server, preserving the
- *    zero-configuration discovery promise in OAuth mode;
+ *    zero-configuration discovery promise in OAuth mode. Where the config
+ *    requires sign-in, only the handshake passes this way and everything else
+ *    is answered with a sign-in challenge;
  *  - a request that DOES present a bearer must verify: a good token is relayed
  *    to the inner handler as authInfo, a bad one is refused 401 with a
  *    `WWW-Authenticate` challenge rather than falling through as if keyless.
@@ -309,6 +316,12 @@ export function gateWithOAuth(
 
       const token = bearerFromAuthorization(request);
       if (!token) {
+        // A deployment that requires sign-in answers only the handshake without
+        // a token, so a deploy can still read its version; everything else is
+        // challenged, and the challenge is what makes a connector sign in.
+        if (config.requireSignIn && !(await isOpenHandshake(request))) {
+          return signInRequired(url);
+        }
         // No token: the keyless server answers, exactly as an anonymous caller is
         // served over stdio and in Phase 1. Only a presented-but-bad token is a 401.
         return inner.fetch(request, options);
@@ -365,6 +378,63 @@ function unauthorized(requestUrl: URL, error: unknown): Response {
     status: 401,
     headers: { "content-type": "application/json", "WWW-Authenticate": challenge },
   });
+}
+
+/**
+ * The JSON-RPC methods a sign-in-required deployment answers without a token.
+ *
+ * Only the handshake. None of these reaches the cogDepot API, and `initialize`
+ * is what the deploy check reads the running version from. Listing the tools is
+ * not here on purpose: an anonymous caller learns nothing it could use, and the
+ * tool list is the first thing a connector asks for, so challenging it is what
+ * starts the connector's sign-in.
+ */
+const OPEN_HANDSHAKE_METHODS: ReadonlySet<string> = new Set([
+  "initialize",
+  "notifications/initialized",
+  "ping",
+]);
+
+/**
+ * True when a request is a single JSON-RPC handshake message.
+ *
+ * Anything else is not: a GET, a batch, a body that does not parse, or one
+ * declared larger than the server accepts (refused unread, so an anonymous
+ * caller cannot make this read a large body).
+ */
+async function isOpenHandshake(request: Request): Promise<boolean> {
+  if (request.method !== "POST") return false;
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > REMOTE_MAX_BODY_BYTES) return false;
+  try {
+    const message: unknown = JSON.parse(await request.clone().text());
+    if (typeof message !== "object" || message === null || Array.isArray(message)) return false;
+    const method = (message as Record<string, unknown>)["method"];
+    return typeof method === "string" && OPEN_HANDSHAKE_METHODS.has(method);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The 401 for a request with no token where sign-in is required.
+ *
+ * RFC 6750 section 3.1: a request that carried no credential gets a challenge
+ * with no error code, and RFC 9728's `resource_metadata` tells the client where
+ * to start signing in, the same document a bad token's challenge points at.
+ */
+function signInRequired(requestUrl: URL): Response {
+  const metadataUrl = `${requestUrl.origin}${OAUTH_PROTECTED_RESOURCE_PATH}`;
+  return new Response(
+    JSON.stringify({ error: "sign_in_required", error_description: REMOTE_SIGN_IN_REQUIRED }),
+    {
+      status: 401,
+      headers: {
+        "content-type": "application/json",
+        "WWW-Authenticate": `Bearer resource_metadata="${metadataUrl}"`,
+      },
+    },
+  );
 }
 
 function jsonResponse(body: unknown, status: number): Response {

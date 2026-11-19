@@ -67,6 +67,13 @@
           "format": "string"
         },
         {
+          "name": "COGDEPOT_OAUTH_REQUIRE_SIGN_IN",
+          "description": "Remote HTTP server only. true refuses a request with no token, except the protocol handshake, with a sign-in challenge instead of serving the keyless tools. Requires OAuth. Ignored by the stdio server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
           "name": "COGDEPOT_STAGE_KEY_PARAM",
           "description": "Hosted remote server only. The name of the SSM parameter holding COGDEPOT_STAGE_KEY's value, read before the first request so the key stays out of the function's configuration. Ignored by the stdio server.",
           "isRequired": false,

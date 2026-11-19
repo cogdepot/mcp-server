@@ -91,6 +91,14 @@ export const STAGE_KEY_HEADER = "x-preview-key";
 export const STAGE_KEY_PLACEHOLDER = "PLACEHOLDER_HASH_PREFIX";
 
 /**
+ * The 401 description for a request with no token, on a remote server that
+ * requires sign-in. A connector reads the challenge header and starts sign-in;
+ * a person with curl reads this.
+ */
+export const REMOTE_SIGN_IN_REQUIRED =
+  "This server requires sign-in. Connect with OAuth (authentication: always required) and retry with the access token.";
+
+/**
  * The RFC 9728 protected-resource-metadata path.
  *
  * When the remote server runs with OAuth configured, a GET here returns the

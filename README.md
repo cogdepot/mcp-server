@@ -88,6 +88,7 @@ The four `COGDEPOT_OAUTH_*` variables are for the **remote HTTP server only** (`
 | `COGDEPOT_OAUTH_CLIENT_ID` | no | The app-client id a presented token's `client_id` claim must equal - the binding that stands in for the absent `aud` on a Cognito access token |
 | `COGDEPOT_OAUTH_RESOURCE` | no | This server's own resource identifier, published in the protected-resource-metadata document a `401` points clients at. https only |
 | `COGDEPOT_OAUTH_SCOPES` | no | Space- or comma-separated scopes advertised as available, e.g. `cogdepot/read cogdepot/trade:finalize`. Advertised only; cogDepot itself is the authority on which scope each action requires |
+| `COGDEPOT_OAUTH_REQUIRE_SIGN_IN` | no | `true` refuses a request with no token, except the handshake, with a sign-in challenge instead of serving the keyless tools. `false` or unset keeps the keyless tools for anonymous callers. Any other value, or `true` with OAuth unset, is refused at startup. The template sets it on staging only |
 
 The hosted server does not take `COGDEPOT_STAGE_KEY` as a value. It takes
 `COGDEPOT_STAGE_KEY_PARAM`, the **name** of the SSM parameter holding the key,
@@ -330,14 +331,17 @@ and refuses only a token that is present but invalid (see the per-user OAuth mod
 below), so a client waiting to be challenged is never prompted and stays keyless.
 Only **"Always required"** runs the OAuth flow up front, so the connector presents
 a token on every request and the full trading tool set appears. This is a
-property of the keyless-friendly design, not a misconfiguration.
+property of the keyless-friendly design, not a misconfiguration. The staging
+server is the exception: it requires sign-in (below) and does challenge an
+anonymous request, but "Always required" is still the setting to use.
 
 The server also runs over HTTP, not only stdio, and is deployed that way: a
 Lambda (`src/lambda.ts`) behind API Gateway and a custom domain answers the same
 MCP protocol the stdio build does. `src/remote.ts` reuses the same tool-building
 core; the transport, and where the credential comes from, are the only
 differences. A request with no credential still answers the keyless discovery
-tools, exactly as the stdio build does. Each POST carries one message: a JSON-RPC
+tools, exactly as the stdio build does, unless the deployment requires sign-in
+(below). Each POST carries one message: a JSON-RPC
 batch is refused with a `400`, and a body over 128 KiB with a `413`.
 
 It serves in one of two modes, chosen once at startup by whether the
@@ -353,6 +357,14 @@ It serves in one of two modes, chosen once at startup by whether the
   with no token still gets the keyless server; only a presented-but-bad token is
   refused, with a `401` and a `WWW-Authenticate` challenge pointing at the
   RFC 9728 protected-resource metadata.
+- **Per-user OAuth, sign-in required** (OAuth set and
+  `COGDEPOT_OAUTH_REQUIRE_SIGN_IN=true`): as above, except that a request with no
+  token gets only the handshake (`initialize`, `notifications/initialized`,
+  `ping`). Everything else, the tool list included, is answered `401` with a
+  `WWW-Authenticate: Bearer resource_metadata="..."` challenge, so a connector
+  set to sign in when the server asks is prompted too. The staging deployment runs
+  this way, because it holds the staging stage key and must not relay anonymous
+  callers to the staging API. Production does not.
 
 A spec-strict client expects the authorization server's endpoints to share one
 origin with its issuer, and Cognito both omits the `code_challenge_methods_supported`

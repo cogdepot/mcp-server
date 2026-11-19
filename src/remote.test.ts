@@ -294,6 +294,7 @@ describe("the OAuth gate", () => {
     clientId: "agent-client-id",
     resource: "https://mcp.cogdepot.com",
     scopes: ["cogdepot/read", "cogdepot/trade:finalize"],
+    requireSignIn: false,
   } as const;
 
   /** A stand-in inner handler that records the authInfo each call is handed. */
@@ -323,6 +324,121 @@ describe("the OAuth gate", () => {
 
   const post = (headers?: Record<string, string>) =>
     new Request("https://mcp.cogdepot.com/", { method: "POST", ...(headers ? { headers } : {}) });
+
+  describe("on a deployment that requires sign-in", () => {
+    const SIGN_IN_CONFIG = { ...OAUTH_CONFIG, requireSignIn: true } as const;
+
+    const rpc = (message: unknown, headers: Record<string, string> = {}) =>
+      new Request("https://staging.mcp.cogdepot.com/", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(message),
+      });
+
+    it.each(["initialize", "notifications/initialized", "ping"])(
+      "answers the handshake message %s without a token, so a deploy can read its version",
+      async (method) => {
+        const { handler, seen } = fakeInner();
+        const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("unused")));
+
+        const res = await gated.fetch(rpc({ jsonrpc: "2.0", id: 1, method, params: {} }));
+
+        expect(res.status).toBe(200);
+        expect(seen).toEqual([undefined]);
+      },
+    );
+
+    it.each(["tools/call", "tools/list", "resources/read", "prompts/get", "completion/complete"])(
+      "challenges %s without a token instead of serving the keyless server",
+      async (method) => {
+        const { handler, seen } = fakeInner();
+        const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("unused")));
+
+        const res = await gated.fetch(rpc({ jsonrpc: "2.0", id: 1, method, params: {} }));
+
+        expect(res.status).toBe(401);
+        const challenge = res.headers.get("WWW-Authenticate") ?? "";
+        // No error code for a request that carried no credential (RFC 6750 3.1),
+        // and the same metadata pointer a bad token gets, so a connector signs in.
+        expect(challenge).toBe(
+          `Bearer resource_metadata="https://staging.mcp.cogdepot.com${OAUTH_PROTECTED_RESOURCE_PATH}"`,
+        );
+        expect(((await res.json()) as Record<string, unknown>)["error"]).toBe("sign_in_required");
+        expect(seen).toHaveLength(0);
+      },
+    );
+
+    it("challenges anything that is not one handshake message", async () => {
+      const { handler, seen } = fakeInner();
+      const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("unused")));
+
+      const refused = [
+        new Request("https://staging.mcp.cogdepot.com/"),
+        new Request("https://staging.mcp.cogdepot.com/", { method: "DELETE" }),
+        rpc([{ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }]),
+        new Request("https://staging.mcp.cogdepot.com/", { method: "POST", body: "not json" }),
+        rpc("initialize"),
+        rpc({ jsonrpc: "2.0", id: 1, method: 7 }),
+      ];
+      for (const request of refused) {
+        expect((await gated.fetch(request)).status).toBe(401);
+      }
+      expect(seen).toHaveLength(0);
+    });
+
+    it("refuses a body declared over the limit without reading it", async () => {
+      const { handler, seen } = fakeInner();
+      const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("unused")));
+      const request = rpc(
+        { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+        { "content-length": String(10 * 1024 * 1024) },
+      );
+      const read = vi.spyOn(request, "clone");
+
+      const res = await gated.fetch(request);
+
+      expect(res.status).toBe(401);
+      expect(read).not.toHaveBeenCalled();
+      expect(seen).toHaveLength(0);
+    });
+
+    it("still serves the sign-in metadata without a token", async () => {
+      const { handler } = fakeInner();
+      const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("unused")));
+
+      const res = await gated.fetch(
+        new Request(`https://staging.mcp.cogdepot.com${OAUTH_PROTECTED_RESOURCE_PATH}`),
+      );
+
+      expect(res.status).toBe(200);
+    });
+
+    it("serves a signed-in caller's tool call", async () => {
+      const { handler, seen } = fakeInner();
+      const claims: AuthInfo = { token: "", clientId: OAUTH_CONFIG.clientId, scopes: [], expiresAt: 9_999_999_999 };
+      const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(claims));
+
+      const res = await gated.fetch(
+        rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: {} }, { authorization: "Bearer good" }),
+      );
+
+      expect(res.status).toBe(200);
+      expect(seen[0]?.token).toBe("good");
+    });
+
+    it("still refuses a bad token as invalid, not as a missing one", async () => {
+      const { handler, seen } = fakeInner();
+      const gated = gateWithOAuth(handler, SIGN_IN_CONFIG, stubVerifier(new Error("token expired")));
+
+      const res = await gated.fetch(
+        rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, { authorization: "Bearer bad" }),
+      );
+
+      expect(res.status).toBe(401);
+      expect(res.headers.get("WWW-Authenticate")).toContain('error="invalid_token"');
+      expect(seen).toHaveLength(0);
+    });
+  });
 
   it("serves the RFC 9728 metadata document at the well-known path, without touching the inner handler", async () => {
     const { handler, seen } = fakeInner();
@@ -895,6 +1011,56 @@ describe("createRemoteHandler with OAuth configured", () => {
       { ...OAUTH_ENV, COGDEPOT_OAUTH_CLIENT_ID: undefined },
       () => {
         expect(() => createRemoteHandler()).toThrow(/partially configured/i);
+      },
+    );
+  });
+
+  it("requires sign-in when COGDEPOT_OAUTH_REQUIRE_SIGN_IN is true", async () => {
+    await withEnv({ ...OAUTH_ENV, COGDEPOT_OAUTH_REQUIRE_SIGN_IN: "true" }, async () => {
+      const handler = createRemoteHandler();
+      const res = await handler.fetch(
+        new Request("https://mcp.cogdepot.com/", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+        }),
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  it("keeps the keyless server for an anonymous caller when the variable is false or unset", async () => {
+    for (const value of ["false", "", undefined]) {
+      await withEnv({ ...OAUTH_ENV, COGDEPOT_OAUTH_REQUIRE_SIGN_IN: value }, async () => {
+        const handler = createRemoteHandler();
+        const res = await handler.fetch(
+          new Request("https://mcp.cogdepot.com/", {
+            method: "POST",
+            headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+          }),
+        );
+        expect(res.status).not.toBe(401);
+      });
+    }
+  });
+
+  it("refuses a requirement it cannot read, rather than reading it as false", () => {
+    withEnv({ ...OAUTH_ENV, COGDEPOT_OAUTH_REQUIRE_SIGN_IN: "yes" }, () => {
+      expect(() => createRemoteHandler()).toThrow(/must be "true" or "false"/);
+    });
+  });
+
+  it("refuses to require sign-in with no OAuth to sign in through", () => {
+    withEnv(
+      {
+        COGDEPOT_OAUTH_ISSUER: undefined,
+        COGDEPOT_OAUTH_CLIENT_ID: undefined,
+        COGDEPOT_OAUTH_RESOURCE: undefined,
+        COGDEPOT_OAUTH_REQUIRE_SIGN_IN: "true",
+      },
+      () => {
+        expect(() => createRemoteHandler()).toThrow(/Sign-in is required but OAuth is not configured/);
       },
     );
   });

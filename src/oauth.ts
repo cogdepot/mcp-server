@@ -39,6 +39,13 @@ export interface OAuthConfig {
   readonly resource: string;
   /** The resource-server scopes advertised as available, e.g. `cogdepot/read`. */
   readonly scopes: readonly string[];
+  /**
+   * When true, a request with no token is refused with a sign-in challenge
+   * instead of being served the keyless tools; only the handshake answers
+   * without one. For a deployment that must not be usable by anonymous callers,
+   * such as a gated staging server. False keeps the zero-configuration promise.
+   */
+  readonly requireSignIn: boolean;
 }
 
 /** Thrown when OAuth config is partially or invalidly set - a misconfiguration worth stopping for. */
@@ -60,12 +67,23 @@ export function resolveOAuthConfig(values: {
   clientId?: string | undefined;
   resource?: string | undefined;
   scopes?: readonly string[] | undefined;
+  requireSignIn?: boolean | undefined;
 }): OAuthConfig | undefined {
   const issuer = values.issuer?.trim();
   const clientId = values.clientId?.trim();
   const resource = values.resource?.trim();
+  const requireSignIn = values.requireSignIn ?? false;
 
-  if (!issuer && !clientId && !resource) return undefined;
+  if (!issuer && !clientId && !resource) {
+    // Requiring sign-in with nothing to sign in to would leave the server open
+    // while its configuration claims it is closed. Refuse rather than ignore.
+    if (requireSignIn) {
+      throw new InvalidOAuthConfigError(
+        "Sign-in is required but OAuth is not configured. Set the issuer, client id and resource too, or drop the requirement.",
+      );
+    }
+    return undefined;
+  }
 
   if (!issuer || !clientId || !resource) {
     throw new InvalidOAuthConfigError(
@@ -81,7 +99,22 @@ export function resolveOAuthConfig(values: {
     clientId,
     resource,
     scopes: values.scopes ?? [],
+    requireSignIn,
   };
+}
+
+/**
+ * Parses COGDEPOT_OAUTH_REQUIRE_SIGN_IN. Unset or blank is false; only `true`
+ * and `false` are accepted. Anything else is refused, because a typo that read
+ * as false would leave a deployment open that was meant to be closed.
+ */
+export function parseRequireSignIn(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase();
+  if (!value || value === "false") return false;
+  if (value === "true") return true;
+  throw new InvalidOAuthConfigError(
+    `COGDEPOT_OAUTH_REQUIRE_SIGN_IN must be "true" or "false", got "${raw ?? ""}".`,
+  );
 }
 
 /**
