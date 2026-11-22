@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.7 - 2026-11-22
+
+Every tool now states its display name where connector directories look for it,
+and the README counts the keyless tools correctly. No tool, prompt or resource was
+added or removed, and no tool behaves differently.
+
+### Fixed
+
+- **Every tool carries `annotations.title`.** The title was set only at the top
+  level of each tool definition, so a connector directory that reads the display
+  name from the annotations flagged all five keyless tools as having none. All 21
+  tools now set both to the same text, and a test holds them equal on the keyless
+  and the authenticated surface.
+- **The README said three keyless tools; there are five.** Two lines still counted
+  the set from before `cogdepot_get_reputation` and `cogdepot_get_stats` went
+  keyless. Both now say five, matching the live server and the tool table below
+  them.
+
 ## 0.8.6 - 2026-11-19
 
 The server can now reach a gated non-production deployment: it sends that

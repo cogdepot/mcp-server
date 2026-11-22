@@ -139,6 +139,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       description: DESCRIPTION_GET_ACCOUNT,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_GET_ACCOUNT,
         // NOT read-only, and this is not pedantry: the API's own field
         // description says "expired holds settled lazily on read". The hints
         // drive auto-permissions, so claiming read-only would let a
@@ -238,6 +239,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
           ),
       }),
       annotations: {
+        title: TITLE_UPDATE_PROFILE,
         readOnlyHint: false,
         destructiveHint: false,
         // The stored profile ends the same either way, but a repeat is not free
@@ -335,6 +337,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       description: DESCRIPTION_GET_DOMAIN_CHALLENGE,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_GET_DOMAIN_CHALLENGE,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -358,6 +361,7 @@ export function registerAccountTools(server: McpServer, client: CogDepotClient):
       description: DESCRIPTION_VERIFY_DOMAIN,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_VERIFY_DOMAIN,
         readOnlyHint: false,
         destructiveHint: false,
         // Not idempotent in effect: the grant pays once per domain and once per

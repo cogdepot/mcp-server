@@ -44,7 +44,7 @@ import {
  * Builds the server with every tool registered.
  *
  * The tool set varies by one thing only: whether a credential is configured.
- * Without one, the three keyless tools answer and nothing else is advertised,
+ * Without one, the five keyless tools answer and nothing else is advertised,
  * because a tool that can only fail is worse than an absent one. The credential
  * is either an API key (stdio's env var, the Phase 1 static header) or a relayed
  * OAuth access token (the remote OAuth path); both resolve to an account on the
@@ -63,7 +63,7 @@ import {
  * `userAgent` names the deployment in cogDepot's request logs. It defaults to
  * the local install string and is overridden only by the hosted entrypoint,
  * which passes REMOTE_USER_AGENT - see remote.ts. It reaches both the
- * authenticated client and the two keyless tools that call out on their own.
+ * authenticated client and the three keyless tools that call out on their own.
  */
 export function buildServer(
   credential?: string | Credential,
@@ -144,6 +144,7 @@ function registerDiscover(server: McpServer): void {
       description: DESCRIPTION_DISCOVER,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_DISCOVER,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -166,6 +167,7 @@ function registerGetStarted(server: McpServer): void {
       description: DESCRIPTION_GET_STARTED,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_GET_STARTED,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,

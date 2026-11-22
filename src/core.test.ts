@@ -85,8 +85,23 @@ describe("tool surface", () => {
 
     for (const tool of tools) {
       expect(tool.title, `${tool.name} needs a title`).toBeTruthy();
+      // The Anthropic directory reads the title from annotations.title and flags
+      // a tool that only carries the top-level one, so both must be set and agree.
+      expect(tool.annotations?.title, `${tool.name} needs annotations.title`).toBe(tool.title);
       expect(tool.annotations?.readOnlyHint, `${tool.name} must declare readOnlyHint`).toBe(true);
       expect(tool.annotations?.destructiveHint).toBe(false);
+    }
+    await close();
+  });
+
+  it("mirrors every authenticated tool's title into annotations.title", async () => {
+    const { client, close } = await connect({ kind: "bearer", value: "an-access-token" });
+    const { tools } = await client.listTools();
+
+    expect(tools.length).toBeGreaterThan(5);
+    for (const tool of tools) {
+      expect(tool.title, `${tool.name} needs a title`).toBeTruthy();
+      expect(tool.annotations?.title, `${tool.name} needs annotations.title`).toBe(tool.title);
     }
     await close();
   });

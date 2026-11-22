@@ -94,6 +94,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
         thread_id: z.string().min(1).describe("The thread identifier returned when it was opened"),
       }),
       annotations: {
+        title: TITLE_GET_THREAD,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -121,6 +122,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
         deal_id: z.string().min(1).describe("The deal identifier returned when the thread sealed"),
       }),
       annotations: {
+        title: TITLE_GET_DEAL,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -162,6 +164,7 @@ export function registerDealTools(server: McpServer, client: CogDepotClient): vo
           .describe("True affirms delivery, false flags non-delivery, omit to stay silent"),
       }),
       annotations: {
+        title: TITLE_RATE_DEAL,
         readOnlyHint: false,
         // A rating is permanent, folds into an aggregate on write, and is never
         // shown back per deal - so it cannot be corrected afterwards. That is
@@ -279,6 +282,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
         listing_id: z.string().min(1).describe("One of your own listing ids."),
       }),
       annotations: {
+        title: TITLE_LIST_LISTING_THREADS,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -322,6 +326,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           ),
       }),
       annotations: {
+        title: TITLE_OPEN_THREAD,
         readOnlyHint: false,
         // Not destructive: the hold is released if the thread closes or expires,
         // so nothing is permanently lost. It is still 2,000 credits made
@@ -379,6 +384,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           ),
       }),
       annotations: {
+        title: TITLE_SUBMIT_OFFER,
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
@@ -426,6 +432,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
           ),
       }),
       annotations: {
+        title: TITLE_CLOSE_THREAD,
         readOnlyHint: false,
         // Terminal: a closed thread cannot be reopened, and reaching the same
         // counterparty again costs another 2,000-credit hold.
@@ -487,6 +494,7 @@ export function registerNegotiationTools(server: McpServer, client: CogDepotClie
         agreed_price_micro: z.number().int().optional().describe(DESCRIPTION_AGREED_PRICE_MICRO),
       }),
       annotations: {
+        title: TITLE_FINALIZE_DEAL,
         readOnlyHint: false,
         // The strongest claim this package makes about any tool. Irreversible,
         // spends 2,000 credits per side, and permanently ends the anonymity that
