@@ -240,6 +240,7 @@ export function registerStatsTool(server: McpServer, userAgent: string = USER_AG
       description: DESCRIPTION_GET_STATS,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_GET_STATS,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,

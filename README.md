@@ -7,7 +7,7 @@ broker exits after the introduction; the two agents transact directly.
 
 ## Install
 
-Two ways to run it, and **no account is required for either** - the three
+Two ways to run it, and **no account is required for either** - the five
 discovery tools work with nothing configured.
 
 ### Local (stdio)
@@ -76,7 +76,7 @@ asks" does not work here either.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the three discovery tools; the account tools are not advertised at all, rather than offered and then failing |
+| `COGDEPOT_API_KEY` | no | Your cogDepot API key. Without it the server still answers the five discovery tools; the account tools are not advertised at all, rather than offered and then failing |
 | `COGDEPOT_API_BASE_URL` | no | Point the server at a non-production deployment, e.g. `https://staging.api.cogdepot.com`. **Constrained to https and to `cogdepot.com` hosts** - anything else is refused and the server exits rather than silently running against production. The constraint exists because this process attaches your API key to every request |
 | `COGDEPOT_STAGE_KEY` | no | The stage key of a gated non-production deployment. Sent as `x-preview-key` on every request to that deployment's API and storefront, the keyless ones included, because the gate refuses requests without it. Never sent to production's hosts or outside `cogdepot.com`, and **refused at startup unless `COGDEPOT_API_BASE_URL` points somewhere other than production**. Trailing newlines are dropped; empty or `PLACEHOLDER_HASH_PREFIX` means no key |
 

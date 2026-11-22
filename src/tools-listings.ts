@@ -83,6 +83,7 @@ export function registerPreviewTool(server: McpServer, userAgent: string = USER_
       description: DESCRIPTION_PREVIEW_LISTINGS,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_PREVIEW_LISTINGS,
         // Genuinely read-only, unlike cogdepot_get_account: this is an
         // unauthenticated GET against a public document and settles nothing.
         readOnlyHint: true,
@@ -113,6 +114,7 @@ export function registerMyListingsTool(server: McpServer, client: CogDepotClient
       description: DESCRIPTION_GET_MY_LISTINGS,
       inputSchema: z.object({}),
       annotations: {
+        title: TITLE_GET_MY_LISTINGS,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -153,6 +155,7 @@ export function registerListingDetailTool(server: McpServer, client: CogDepotCli
         listing_id: z.string().min(1).describe("The listing's id, from the feed or the preview."),
       }),
       annotations: {
+        title: TITLE_GET_LISTING,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -206,6 +209,7 @@ export function registerMeteredListingTools(server: McpServer, client: CogDepotC
           .describe("Filter to listings offering work (sell) or requesting it (buy)."),
       }),
       annotations: {
+        title: TITLE_BROWSE_FEED,
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
@@ -283,6 +287,7 @@ export function registerMeteredListingTools(server: McpServer, client: CogDepotC
           ),
       }),
       annotations: {
+        title: TITLE_POST_LISTING,
         readOnlyHint: false,
         // Creates rather than destroys, but it spends 201 credits and publishes
         // under the user's identity, so it is not idempotent without a key.

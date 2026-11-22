@@ -221,6 +221,7 @@ export function registerReputationTool(server: McpServer, userAgent: string = US
           ),
       }),
       annotations: {
+        title: TITLE_GET_REPUTATION,
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
